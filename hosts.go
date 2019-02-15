@@ -12,10 +12,12 @@ const EMPTY = 10
 const COMMENT = 20
 const ADDRESS = 30
 
+// HostsConfig
 type HostsConfig struct {
 	FilePath string
 }
 
+// Hosts
 type Hosts struct {
 	HostsConfig
 	hostFileLines HostFileLines
@@ -28,8 +30,10 @@ type AddressLocations map[string]int
 // to an original line number
 type HostLocations map[string]int
 
+// HostFileLines
 type HostFileLines []HostFileLine
 
+// HostFileLine
 type HostFileLine struct {
 	OriginalLineNum int
 	LineType        int
@@ -51,16 +55,6 @@ func NewHosts(hc HostsConfig) *Hosts {
 	h.hostFileLines = ParseHosts(h.FilePath)
 
 	return h
-}
-
-// removeStringElement removed an element of a string slice
-func removeStringElement(slice []string, s int) []string {
-	return append(slice[:s], slice[s+1:]...)
-}
-
-// removeHFLElement removed an element of a HostFileLine slice
-func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
-	return append(slice[:s], slice[s+1:]...)
 }
 
 // AddHost adds a host to an address and removes the host
@@ -121,12 +115,7 @@ func (h *Hosts) HostAddressLookup(host string) (bool, string, int) {
 	return false, "", 0
 }
 
-// addAddress adds and ip address and updates indexes
-func (h *Hosts) addAddress(address string) int {
-	h.hostFileLines = append(h.hostFileLines)
-	return len(h.hostFileLines) + 1
-}
-
+// RenderHostsFile
 func (h *Hosts) RenderHostsFile() string {
 	hf := ""
 
@@ -137,10 +126,12 @@ func (h *Hosts) RenderHostsFile() string {
 	return hf
 }
 
+// GetHostFileLines
 func (h *Hosts) GetHostFileLines() *HostFileLines {
 	return &h.hostFileLines
 }
 
+// ParseHosts
 func ParseHosts(path string) []HostFileLine {
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -189,6 +180,17 @@ func ParseHosts(path string) []HostFileLine {
 	return hostFileLines
 }
 
+// removeStringElement removed an element of a string slice
+func removeStringElement(slice []string, s int) []string {
+	return append(slice[:s], slice[s+1:]...)
+}
+
+// removeHFLElement removed an element of a HostFileLine slice
+func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
+	return append(slice[:s], slice[s+1:]...)
+}
+
+// lineFormatter
 func lineFormatter(hfl HostFileLine) string {
 
 	if hfl.LineType < ADDRESS {
