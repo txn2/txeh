@@ -1,7 +1,7 @@
 # Etc Hosts Management Library
 
 This small go library was developed to encapsulate the complexity of
-working with /etc/hosts by providing a simple interfact to load, add or remove rntries and save a /etc/host file. No validation is done on the input data and is considered out of scope for this project.
+working with /etc/hosts by providing a simple interface to load, create, remove and save entries to an /etc/host file. No validation is done on the input data. Validation is considered out of scope for this project, use with caution.
 
 Basic implemention:
 ```go
