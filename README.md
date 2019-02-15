@@ -16,7 +16,10 @@ import (
 )
 
 func main() {
-	hosts := txeh.NewHostsDefault()
+	hosts, err := txeh.NewHostsDefault()
+	if err != nil {
+		panic(err)
+	}
 
 	hosts.AddHost("127.100.100.100", "test")
 	hosts.AddHost("127.100.100.101", "logstash")

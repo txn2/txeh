@@ -3,7 +3,6 @@ package txeh
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"runtime"
 	"strings"
 	"sync"
@@ -50,12 +49,12 @@ type HostFileLine struct {
 
 // NewHostsDefault returns a hosts object with
 // default configuration
-func NewHostsDefault() *Hosts {
+func NewHostsDefault() (*Hosts, error) {
 	return NewHosts(&HostsConfig{})
 }
 
 // NewHosts returns a new hosts object
-func NewHosts(hc *HostsConfig) *Hosts {
+func NewHosts(hc *HostsConfig) (*Hosts, error) {
 	h := &Hosts{HostsConfig: hc}
 	h.Lock()
 	defer h.Unlock()
@@ -74,9 +73,14 @@ func NewHosts(hc *HostsConfig) *Hosts {
 		h.WriteFilePath = h.ReadFilePath
 	}
 
-	h.hostFileLines = ParseHosts(h.ReadFilePath)
+	hfl, err := ParseHosts(h.ReadFilePath)
+	if err != nil {
+		return nil, err
+	}
 
-	return h
+	h.hostFileLines = hfl
+
+	return h, nil
 }
 
 // Save rendered hosts file
@@ -272,10 +276,10 @@ func (h *Hosts) GetHostFileLines() *HostFileLines {
 }
 
 // ParseHosts
-func ParseHosts(path string) []HostFileLine {
+func ParseHosts(path string) ([]HostFileLine, error) {
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 
 	lines := strings.Split(string(input), "\n")
@@ -321,7 +325,7 @@ func ParseHosts(path string) []HostFileLine {
 
 	}
 
-	return hostFileLines
+	return hostFileLines, nil
 }
 
 // removeStringElement removed an element of a string slice
