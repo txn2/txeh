@@ -101,11 +101,17 @@ func (h *Hosts) SaveAs(fileName string) error {
 }
 
 // Reload hosts file
-func (h *Hosts) Reload() {
-	h.Lock()
-	defer h.Unlock()
+func (h *Hosts) Reload() error {
+	hfl, err := ParseHosts(h.ReadFilePath)
+	if err != nil {
+		return err
+	}
 
-	h.hostFileLines = ParseHosts(h.ReadFilePath)
+	h.Lock()
+	h.hostFileLines = hfl
+	h.Unlock()
+
+	return nil
 }
 
 // RemoveAddresses removes all entries (lines) with the provided address.
