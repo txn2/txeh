@@ -16,6 +16,17 @@ A computer's [/etc/hosts] file is a powerful utility for developers and system a
 
 ## txeh Utility
 
+### Install
+
+MacOS [homebrew](https://brew.sh) users can `brew install txn2/tap/txeh`, otherwise see [releases](https://github.com/txn2/txeh/releases) for packages and binaries for a number of distros and architectures including Windows, Linux and Arm based systems.
+
+Complie and run from source (dependencies are vendored):
+```
+go run ./util/txeh.go
+```
+
+### Use
+
 The txeh CLI application allows command line or scripted access to /etc/hosts file modification.
 
 **Example CLI Usage**:
