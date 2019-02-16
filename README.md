@@ -12,7 +12,7 @@ It is easy to open your [/etc/hosts] file in text editor and add or remove entri
 
 **txeh** was initially built as a golang library to support [kubefwd](https://github.com/txn2/kubefwd), a Kubernetes port-forwarding utility utilizing [/etc/hosts] heavily, to associate custom hostnames with multiple local loopback IP addresses and remove these entries when it terminates.
 
-A computer's [/etc/hosts] file is a powerful utility for developers and system administrators to create localized, custom DNS entries. This small go library and utility were developed to encapsulate the complexity of working with /etc/hosts by providing a simple interface for adding and removing entries in a [/etc/hosts] file.
+A computer's [/etc/hosts] file is a powerful utility for developers and system administrators to create localized, custom DNS entries. This small go library and utility were developed to encapsulate the complexity of working with [/etc/hosts] directly by providing a simple interface for adding and removing entries in a [/etc/hosts] file.
 
 ## txeh Utility
 
@@ -109,5 +109,21 @@ func main() {
 }
 
 ```
+
+## Build Release
+
+Build test release:
+```bash
+goreleaser --skip-publish --rm-dist --skip-validate
+```
+
+Build and release:
+```bash
+GITHUB_TOKEN=$GITHUB_TOKEN goreleaser --rm-dist
+```
+
+### License
+
+Apache License 2.0
 
 [/etc/hosts]:https://en.wikipedia.org/wiki/Hosts_(file)
