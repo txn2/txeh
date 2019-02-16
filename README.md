@@ -1,4 +1,12 @@
+![txeh - /etc/hosts mangement](txeh.png)
+
+
 # Etc Hosts Management Library
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/txn2/txeh)](https://goreportcard.com/report/github.com/txn2/txeh)
+[![GoDoc](https://godoc.org/github.com/txn2/irsync/txeh?status.svg)](https://godoc.org/github.com/txn2/txeh)
+
+
 
 This small go library was developed to encapsulate the complexity of
 working with /etc/hosts by providing a simple interface to load, create, remove and save entries to an /etc/host file. No validation is done on the input data. Validation is considered out of scope for this project, use with caution.
