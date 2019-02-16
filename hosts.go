@@ -288,12 +288,15 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 		return nil, err
 	}
 
-	lines := strings.Split(string(input), "\n")
+	inputNormalized := strings.Replace(string(input), "\r\n", "\n", -1)
 
-	hostFileLines := make([]HostFileLine, len(lines))
+	lines := strings.Split(inputNormalized, "\n")
+	dataLines := lines[:len(lines)-1]
+
+	hostFileLines := make([]HostFileLine, len(dataLines))
 
 	// trim leading an trailing whitespace
-	for i, l := range lines {
+	for i, l := range dataLines {
 		curLine := &hostFileLines[i]
 		curLine.OriginalLineNum = i
 		curLine.Raw = l
