@@ -24,7 +24,7 @@ build:
   - amd64
   - arm
 
-  ldflags: -s -w -X cmd.Version={{.Version}}
+  ldflags: "-s -w -X github.com/txn2/txeh/util/cmd.Version={{.Version}}"
 
 release:
   # Repo in which the release will be created.
