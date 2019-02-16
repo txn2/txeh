@@ -1,15 +1,35 @@
 ![txeh - /etc/hosts mangement](txeh.png)
 
 
-# Etc Hosts Management Library
+# Etc Hosts Management Utility & Go Library
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/txn2/txeh)](https://goreportcard.com/report/github.com/txn2/txeh)
 [![GoDoc](https://godoc.org/github.com/txn2/irsync/txeh?status.svg)](https://godoc.org/github.com/txn2/txeh)
 
+## txeh Utility
 
+The txeh CLI application allows command line or scripted access to /etc/hosts file modification.
+
+Examples:
+```bash
+# point the hostnames "test" and "test.two" to local loopback
+sudo txeh add 127.0.0.1 test test.two
+
+# remove the hostname "test"
+sudo txeh remove test
+```
+
+
+
+
+### Motivation
+
+TXEH was build to support [kubefwd](https://github.com/txn2/kubefwd), a Kubernetes port-forwarding utility utilizing [/etc/hosts] to associate custom hostnames with local IP addresses. A computer's [/etc/hosts] file is a powerful utility for developers and system administrators to create localized, custom DNS entries.
 
 This small go library was developed to encapsulate the complexity of
-working with /etc/hosts by providing a simple interface to load, create, remove and save entries to an /etc/host file. No validation is done on the input data. Validation is considered out of scope for this project, use with caution.
+working with /etc/hosts by providing a simple interface to load, create, remove and save entries to an /etc/host file. No validation is done on the input data. **Validation is considered out of scope for this project, use with caution**.
+
+
 
 Basic implemention:
 ```go
@@ -55,3 +75,5 @@ func main() {
 }
 
 ```
+
+[/etc/hosts]:https://en.wikipedia.org/wiki/Hosts_(file)
