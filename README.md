@@ -46,6 +46,9 @@ sudo txeh remove ip 93.184.216.34
 # remove multiple IP addresses
 sudo txeh remove ip 93.184.216.34 127.1.27.1
 
+# remove CIDR ranges
+sudo txeh remove cidr 93.184.216.0/24 127.1.27.0/28
+
 # quiet mode will suppress output
 sudo txeh remove ip 93.184.216.34 -q
 

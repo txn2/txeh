@@ -54,6 +54,26 @@ func init() {
 	hostnameRegex = regexp.MustCompile(`^([A-Za-z]|[0-9]|-|_|\.)+$`)
 }
 
+func validateCIDRs(cidrs []string) (bool, string) {
+	for _, cr := range cidrs {
+		if validateCIDR(cr) == false {
+			return false, cr
+		}
+	}
+
+	return true, ""
+}
+
+func validateCIDR(c string) bool {
+
+	_, _, err := net.ParseCIDR(c)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 func validateIPAddresses(ips []string) (bool, string) {
 	for _, ip := range ips {
 		if validateIPAddress(ip) == false {
