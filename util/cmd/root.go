@@ -36,13 +36,19 @@ Read more including useage as a Go library at https://github.com/txn2/txeh`,
 	},
 }
 
-var Quiet bool
-var HostsFileReadPath string
-var HostsFileWritePath string
-var DryRun bool
+var (
+	// HostsFileReadPath specify host file to read
+	HostsFileReadPath string
+	// HostsFileWritePath specify path to write resulting host file
+	HostsFileWritePath string
+	// Quiet results in no output
+	Quiet bool
+	// DryRun sends output to STDOUT (ignores quiet)
+	DryRun bool
 
-var etcHosts *txeh.Hosts
-var hostnameRegex *regexp.Regexp
+	etcHosts      *txeh.Hosts
+	hostnameRegex *regexp.Regexp
+)
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&DryRun, "dryrun", "d", false, "dry run, output to stdout (ignores quiet)")
@@ -65,7 +71,6 @@ func validateCIDRs(cidrs []string) (bool, string) {
 }
 
 func validateCIDR(c string) bool {
-
 	_, _, err := net.ParseCIDR(c)
 	if err != nil {
 		return false
@@ -85,7 +90,6 @@ func validateIPAddresses(ips []string) (bool, string) {
 }
 
 func validateIPAddress(ip string) bool {
-
 	if net.ParseIP(ip) == nil {
 		return false
 	}
@@ -107,22 +111,25 @@ func validateHostname(hostname string) bool {
 	return hostnameRegex.MatchString(hostname)
 }
 
-func initEtcHosts() {
-	if HostsFileReadPath == "" && HostsFileWritePath == "" {
-		hosts, err := txeh.NewHostsDefault()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+func emptyFilePaths() bool {
+	return HostsFileReadPath == "" && HostsFileWritePath == ""
+}
 
-		etcHosts = hosts
-		return
+func initEtcHosts() {
+	var (
+		hosts *txeh.Hosts
+		err   error
+	)
+
+	if emptyFilePaths() {
+		hosts, err = txeh.NewHostsDefault()
+	} else {
+		hosts, err = txeh.NewHosts(&txeh.HostsConfig{
+			ReadFilePath:  HostsFileReadPath,
+			WriteFilePath: HostsFileWritePath,
+		})
 	}
 
-	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
-		ReadFilePath:  HostsFileReadPath,
-		WriteFilePath: HostsFileWritePath,
-	})
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
