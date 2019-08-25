@@ -92,6 +92,9 @@ func (h *Hosts) Save() error {
 func (h *Hosts) SaveAs(fileName string) error {
 	hfData := []byte(h.RenderHostsFile())
 
+	h.Lock()
+	defer h.Unlock()
+
 	err := ioutil.WriteFile(fileName, hfData, 0644)
 	if err != nil {
 		return err
@@ -102,14 +105,15 @@ func (h *Hosts) SaveAs(fileName string) error {
 
 // Reload hosts file
 func (h *Hosts) Reload() error {
+	h.Lock()
+	defer h.Unlock()
+
 	hfl, err := ParseHosts(h.ReadFilePath)
 	if err != nil {
 		return err
 	}
 
-	h.Lock()
 	h.hostFileLines = hfl
-	h.Unlock()
 
 	return nil
 }
@@ -278,6 +282,9 @@ func (h *Hosts) RenderHostsFile() string {
 
 // GetHostFileLines
 func (h *Hosts) GetHostFileLines() *HostFileLines {
+	h.Lock()
+	defer h.Unlock()
+
 	return &h.hostFileLines
 }
 
