@@ -45,6 +45,7 @@ type HostFileLine struct {
 	Hostnames       []string
 	Raw             string
 	Trimed          string
+	Comment         string
 }
 
 // NewHostsDefault returns a hosts object with
@@ -322,6 +323,12 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 			continue
 		}
 
+		curLineSplit := strings.SplitN(curLine.Trimed, "#", 2)
+		if len(curLineSplit) > 1 {
+			curLine.Comment = curLineSplit[1]
+		}
+		curLine.Trimed = curLineSplit[0]
+
 		curLine.Parts = strings.Fields(curLine.Trimed)
 
 		if len(curLine.Parts) > 1 {
@@ -361,5 +368,8 @@ func lineFormatter(hfl HostFileLine) string {
 		return hfl.Raw
 	}
 
+	if len(hfl.Comment) > 0 {
+		return fmt.Sprintf("%-16s %s #%s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
+	}
 	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
 }
