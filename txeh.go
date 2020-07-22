@@ -298,8 +298,7 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 
 	inputNormalized := strings.Replace(string(input), "\r\n", "\n", -1)
 
-	lines := strings.Split(inputNormalized, "\n")
-	dataLines := lines[:len(lines)-1]
+	dataLines := strings.Split(inputNormalized, "\n")
 
 	hostFileLines := make([]HostFileLine, len(dataLines))
 
