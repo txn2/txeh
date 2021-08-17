@@ -3,6 +3,7 @@ package txeh
 import (
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -211,6 +212,10 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 
 		// if the hostname is at a different address, go and remove it from the address
 		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
+			//for localhost we can match more than one host
+			if isLocalhost(address) {
+				break
+			}
 			if hst == host {
 				h.Lock()
 				h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
@@ -371,4 +376,10 @@ func lineFormatter(hfl HostFileLine) string {
 		return fmt.Sprintf("%-16s %s #%s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
 	}
 	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
+}
+// IPLocalhost is a regex pattern for IPv4 or IPv6 loopback range.
+const ipLocalhost = `((127\.([0-9]{1,3}\.){2}[0-9]{1,3})|(::1)$)`
+var localhostIPRegexp = regexp.MustCompile(ipLocalhost)
+func isLocalhost(address string) bool {
+	return localhostIPRegexp.MatchString(address)
 }
