@@ -304,6 +304,8 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 	inputNormalized := strings.Replace(string(input), "\r\n", "\n", -1)
 
 	dataLines := strings.Split(inputNormalized, "\n")
+	//remove extra blank line at end that does not exist in /etc/hosts file
+	dataLines = dataLines[:len(dataLines)-1]
 
 	hostFileLines := make([]HostFileLine, len(dataLines))
 
@@ -377,9 +379,12 @@ func lineFormatter(hfl HostFileLine) string {
 	}
 	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
 }
+
 // IPLocalhost is a regex pattern for IPv4 or IPv6 loopback range.
 const ipLocalhost = `((127\.([0-9]{1,3}\.){2}[0-9]{1,3})|(::1)$)`
+
 var localhostIPRegexp = regexp.MustCompile(ipLocalhost)
+
 func isLocalhost(address string) bool {
 	return localhostIPRegexp.MatchString(address)
 }
