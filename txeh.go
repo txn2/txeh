@@ -3,6 +3,7 @@ package txeh
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"regexp"
 	"runtime"
 	"strings"
@@ -13,6 +14,13 @@ const UNKNOWN = 0
 const EMPTY = 10
 const COMMENT = 20
 const ADDRESS = 30
+
+type IPFamily int64
+
+const (
+	IPFamilyV4 IPFamily = iota
+	IPFamilyV6
+)
 
 // HostsConfig
 type HostsConfig struct {
@@ -202,9 +210,17 @@ func (h *Hosts) AddHosts(address string, hosts []string) {
 func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 	host := strings.TrimSpace(strings.ToLower(hostRaw))
 	address := strings.TrimSpace(strings.ToLower(addressRaw))
+	addressIP := net.ParseIP(address)
+	if addressIP == nil {
+		return
+	}
+	ipFamily := IPFamilyV4
+	if addressIP.To4() == nil {
+		ipFamily = IPFamilyV6
+	}
 
 	// does the host already exist
-	if ok, exAdd, hflIdx := h.HostAddressLookup(host); ok {
+	if ok, exAdd, hflIdx := h.HostAddressLookup(host, ipFamily); ok {
 		// if the address is the same we are done
 		if address == exAdd {
 			return
@@ -257,13 +273,20 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 
 // HostAddressLookup returns true is the host is found, a string
 // containing the address and the index of the hfl
-func (h *Hosts) HostAddressLookup(host string) (bool, string, int) {
+func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string, int) {
 	h.Lock()
 	defer h.Unlock()
 
 	for i, hfl := range h.hostFileLines {
 		for _, hn := range hfl.Hostnames {
-			if hn == strings.ToLower(host) {
+			ipAddr := net.ParseIP(hfl.Address)
+			if ipAddr == nil || hn != strings.ToLower(host) {
+				continue
+			}
+			if ipFamily == IPFamilyV4 && ipAddr.To4() != nil {
+				return true, hfl.Address, i
+			}
+			if ipFamily == IPFamilyV6 && ipAddr.To4() == nil {
 				return true, hfl.Address, i
 			}
 		}
