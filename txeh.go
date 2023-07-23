@@ -287,6 +287,9 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 
 // ListHostsByIP returns a list of hostnames associated with a given IP address
 func (h *Hosts) ListHostsByIP(address string) []string {
+	h.Lock()
+	defer h.Unlock()
+
 	var hosts []string
 
 	for _, hsl := range h.hostFileLines {
@@ -300,6 +303,9 @@ func (h *Hosts) ListHostsByIP(address string) []string {
 
 // ListAddressesByHost returns a list of IPs associated with a given hostname
 func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
+	h.Lock()
+	defer h.Unlock()
+
 	var addresses [][]string
 
 	for _, hsl := range h.hostFileLines {
@@ -318,6 +324,9 @@ func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
 
 // ListHostsByCIDR returns a list of IPs and hostnames associated with a given CIDR
 func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
+	h.Lock()
+	defer h.Unlock()
+
 	var ipHosts [][]string
 
 	_, subnet, _ := net.ParseCIDR(cidr)
