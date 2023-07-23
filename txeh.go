@@ -347,10 +347,12 @@ func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string,
 	h.Lock()
 	defer h.Unlock()
 
+	host = strings.ToLower(strings.TrimSpace(host))
+
 	for i, hfl := range h.hostFileLines {
 		for _, hn := range hfl.Hostnames {
 			ipAddr := net.ParseIP(hfl.Address)
-			if ipAddr == nil || hn != strings.ToLower(host) {
+			if ipAddr == nil || hn != host {
 				continue
 			}
 			if ipFamily == IPFamilyV4 && ipAddr.To4() != nil {
