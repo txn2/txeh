@@ -75,4 +75,7 @@ func TestNewHosts(t *testing.T) {
 		}
 	}
 
+	if !found {
+		t.Fatal("ListHostsByIP was unable find an IP")
+	}
 }
