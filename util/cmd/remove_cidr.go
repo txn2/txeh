@@ -23,8 +23,8 @@ var removeCidrCmd = &cobra.Command{
 			return errors.New("the \"remove cidr\" command requires at least one CIDR range to remove")
 		}
 
-		if ok, ip := validateCIDRs(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid CIDR", ip))
+		if ok, cidr := validateCIDRs(args); !ok {
+			return errors.New(fmt.Sprintf("\"%s\" is not a valid CIDR", cidr))
 		}
 
 		return nil

@@ -267,7 +267,54 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 	h.Unlock()
 }
 
-// HostAddressLookup returns true is the host is found, a string
+// ListHostsByIP returns a list of hostnames associated with a given IP address
+func (h *Hosts) ListHostsByIP(address string) []string {
+	var hosts []string
+
+	for _, hsl := range h.hostFileLines {
+		if hsl.Address == address {
+			hosts = append(hosts, hsl.Hostnames...)
+		}
+	}
+
+	return hosts
+}
+
+// ListAddressesByHost returns a list of IPs associated with a given hostname
+func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
+	var addresses [][]string
+
+	for _, hsl := range h.hostFileLines {
+		for _, hst := range hsl.Hostnames {
+			if hst == hostname {
+				addresses = append(addresses, []string{hsl.Address, hst})
+			}
+			if exact == false && hst != hostname && strings.Contains(hst, hostname) {
+				addresses = append(addresses, []string{hsl.Address, hst})
+			}
+		}
+	}
+
+	return addresses
+}
+
+// ListHostsByCIDR returns a list of IPs and hostnames associated with a given CIDR
+func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
+	var ipHosts [][]string
+
+	_, subnet, _ := net.ParseCIDR(cidr)
+	for _, hsl := range h.hostFileLines {
+		if subnet.Contains(net.ParseIP(hsl.Address)) {
+			for _, hst := range hsl.Hostnames {
+				ipHosts = append(ipHosts, []string{hsl.Address, hst})
+			}
+		}
+	}
+
+	return ipHosts
+}
+
+// HostAddressLookup returns true if the host is found, a string
 // containing the address and the index of the hfl
 func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string, int) {
 	h.Lock()
