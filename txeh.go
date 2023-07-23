@@ -1,6 +1,7 @@
 package txeh
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -25,6 +26,9 @@ const (
 type HostsConfig struct {
 	ReadFilePath  string
 	WriteFilePath string
+	// RawText for input. If RawText is set ReadFilePath, WriteFilePath are ignored. Use RenderHostsFile rather
+	// than save to get the results.
+	RawText *string
 }
 
 type Hosts struct {
@@ -71,12 +75,22 @@ func NewHosts(hc *HostsConfig) (*Hosts, error) {
 		defaultHostsFile = `C:\Windows\System32\Drivers\etc\hosts`
 	}
 
-	if h.ReadFilePath == "" {
+	if h.ReadFilePath == "" && h.RawText == nil {
 		h.ReadFilePath = defaultHostsFile
 	}
 
-	if h.WriteFilePath == "" {
+	if h.WriteFilePath == "" && h.RawText == nil {
 		h.WriteFilePath = h.ReadFilePath
+	}
+
+	if h.RawText != nil {
+		hfl, err := ParseHostsFromString(*h.RawText)
+		if err != nil {
+			return nil, err
+		}
+
+		h.hostFileLines = hfl
+		return h, nil
 	}
 
 	hfl, err := ParseHosts(h.ReadFilePath)
@@ -96,6 +110,9 @@ func (h *Hosts) Save() error {
 
 // SaveAs saves rendered hosts file to the filename specified
 func (h *Hosts) SaveAs(fileName string) error {
+	if h.RawText != nil {
+		return errors.New("can not call Save or SaveAs with RawText. Use RenderHostsFile to return a string")
+	}
 	hfData := []byte(h.RenderHostsFile())
 
 	h.Lock()
@@ -173,6 +190,7 @@ func (h *Hosts) RemoveHost(host string) {
 
 // RemoveFirstHost the first hostname entry found and returns true if successful
 func (h *Hosts) RemoveFirstHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
 	h.Lock()
 	defer h.Unlock()
 
@@ -363,8 +381,11 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseHostsFromString(string(input))
+}
 
-	inputNormalized := strings.Replace(string(input), "\r\n", "\n", -1)
+func ParseHostsFromString(input string) ([]HostFileLine, error) {
+	inputNormalized := strings.Replace(input, "\r\n", "\n", -1)
 
 	dataLines := strings.Split(inputNormalized, "\n")
 	//remove extra blank line at end that does not exist in /etc/hosts file
