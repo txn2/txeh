@@ -3,7 +3,6 @@
 
 # Etc Hosts Management Utility & Go Library
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/txn2/txeh)](https://goreportcard.com/report/github.com/txn2/txeh)
 [![GoDoc](https://godoc.org/github.com/txn2/irsync/txeh?status.svg)](https://godoc.org/github.com/txn2/txeh)
 
 ### /etc/hosts Management

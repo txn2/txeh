@@ -23,7 +23,7 @@ var removeIpCmd = &cobra.Command{
 		}
 
 		if ok, ip := validateIPAddresses(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid ip address", ip))
+			return fmt.Errorf("\"%s\" is not a valid ip address", ip)
 		}
 
 		return nil
@@ -33,11 +33,11 @@ var removeIpCmd = &cobra.Command{
 			fmt.Printf("Removing ip(s) \"%s\"\n", strings.Join(args, " "))
 		}
 
-		RemoveIPs(args)
+		removeIPs(args)
 	},
 }
 
-func RemoveIPs(ips []string) {
+func removeIPs(ips []string) {
 
 	etcHosts.RemoveAddresses(ips)
 
