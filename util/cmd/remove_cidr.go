@@ -3,11 +3,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"net"
+	"github.com/spf13/cobra"
 	"os"
 	"strings"
-
-	"github.com/spf13/cobra"
 )
 
 func init() {
@@ -40,39 +38,18 @@ var removeCidrCmd = &cobra.Command{
 
 func RemoveIPRanges(cidrs []string) {
 
-	addresses := make([]string, 0)
-
-	// loop through all the CIDR ranges
-	for _, cidr := range cidrs {
-
-		_, ipnet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			fmt.Printf("Error: there was a problem with the IP range %s. Reason: %s\n", cidr, err.Error())
-			os.Exit(1)
-		}
-
-		hfLines := etcHosts.GetHostFileLines()
-
-		for _, hfl := range *hfLines {
-
-			ip := net.ParseIP(hfl.Address)
-			if ip != nil {
-				if ipnet.Contains(ip) {
-					addresses = append(addresses, hfl.Address)
-				}
-			}
-		}
-
+	err := etcHosts.RemoveCIDRs(cidrs)
+	if err != nil {
+		fmt.Printf("Error: there was a problem parsing a CIDR. Reason: %s\n", err.Error())
+		os.Exit(1)
 	}
-
-	etcHosts.RemoveAddresses(addresses)
 
 	if DryRun {
 		fmt.Print(etcHosts.RenderHostsFile())
 		return
 	}
 
-	err := etcHosts.Save()
+	err = etcHosts.Save()
 	if err != nil {
 		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
 		os.Exit(1)
