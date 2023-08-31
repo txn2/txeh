@@ -1,4 +1,4 @@
-module github.com/txn2/txeh
+module github.com/k8s-school/txeh
 
 go 1.20
 

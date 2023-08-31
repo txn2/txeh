@@ -7,7 +7,7 @@ import (
 	"regexp"
 
 	"github.com/spf13/cobra"
-	"github.com/txn2/txeh"
+	"github.com/k8s-school/txeh"
 )
 
 var rootCmd = &cobra.Command{

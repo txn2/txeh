@@ -1,6 +1,6 @@
 package main
 
-import "github.com/txn2/txeh/util/cmd"
+import "github.com/k8s-school/txeh/txeh/cmd"
 
 func main() {
 	cmd.Execute()
