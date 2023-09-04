@@ -172,12 +172,12 @@ func main() {
 
 Build test release:
 ```bash
-goreleaser --skip-publish --rm-dist --skip-validate
+goreleaser --skip-publish --clean --skip-validate
 ```
 
 Build and release:
 ```bash
-GITHUB_TOKEN=$GITHUB_TOKEN goreleaser --rm-dist
+GITHUB_TOKEN=$GITHUB_TOKEN goreleaser --clean
 ```
 
 ### License
