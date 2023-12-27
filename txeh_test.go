@@ -111,6 +111,9 @@ func TestNewHosts(t *testing.T) {
 	fromRenderedHosts, err := NewHosts(&HostsConfig{
 		RawText: &renderedData,
 	})
+	if err != nil {
+		t.Fatalf("TestNewHosts failed on NewHosts: %v", err)
+	}
 
 	for _, k := range []string{"A", "T", "T", "X", "X", "E", "E", "H", "H"} {
 		fromRenderedHosts.AddHost("127.100.100.100", k)
@@ -302,4 +305,12 @@ func TestMethods(t *testing.T) {
 		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
 	}
 
+	mockHosts.UpdateHost("127.0.0.1", "127.0.0.2", "google.com", "Testing Testing")
+
+	hfl = strings.Split(mockHosts.RenderHostsFile(), "\n")
+	line = 0
+	expectString = "127.0.0.2        google.com #Testing Testing"
+	if hfl[line] != expectString {
+		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+	}
 }
