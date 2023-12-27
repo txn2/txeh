@@ -274,6 +274,7 @@ func TestMethods(t *testing.T) {
 	}
 	mockHosts.AddHosts(ip, []string{"test-0", "test-1", "test-2"})
 	expect = 11
+	line := 18
 	hostsAtAddress = mockHosts.ListHostsByIP(ip)
 	if len(hostsAtAddress) != expect {
 		t.Fatalf("ListHostsByIP returned returned "+
@@ -299,7 +300,7 @@ func TestMethods(t *testing.T) {
 		t.Fatalf("Expeced %d lines and got %d", lines, len(hfl))
 	}
 
-	line := 17
+	line = 17
 	expectString := "# existing comment"
 	if hfl[line] != expectString {
 		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
