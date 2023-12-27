@@ -313,4 +313,31 @@ func TestMethods(t *testing.T) {
 	if hfl[line] != expectString {
 		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
 	}
+
+	mockHosts.UpdateHosts("127.1.27.5", "1.1.1.1", []string{"test-11", "test-22", "test-33"}, "Testing Testing Testing")
+	expect = 3
+	hostsAtAddress = mockHosts.ListHostsByIP("1.1.1.1")
+	if len(hostsAtAddress) != expect {
+		t.Fatalf("ListHostsByIP returned returned "+
+			"invalid number of hosts for %v got %v expecting %v", ip, len(hostsAtAddress), expect)
+	}
+
+	hfl = strings.Split(mockHosts.RenderHostsFile(), "\n")
+	line = 18
+	expectString = "1.1.1.1          test-11 #Testing Testing Testing"
+	if hfl[line] != expectString {
+		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+	}
+
+	line = 19
+	expectString = "1.1.1.1          test-22 #Testing Testing Testing"
+	if hfl[line] != expectString {
+		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+	}
+
+	line = 20
+	expectString = "1.1.1.1          test-33 #Testing Testing Testing"
+	if hfl[line] != expectString {
+		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+	}
 }

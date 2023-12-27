@@ -381,9 +381,9 @@ func (h *Hosts) UpdateHost(originalAddress string, newAddress string, host strin
 }
 
 // UpdateHosts updates the address of a host
-func (h *Hosts) UpdateHosts(address string, hosts []string, comment ...string) {
+func (h *Hosts) UpdateHosts(originalAddress string, newAddress string, hosts []string, comment ...string) {
 	for _, hst := range hosts {
-		h.UpdateHost(address, address, hst, comment...)
+		h.UpdateHost(originalAddress, newAddress, hst, comment...)
 	}
 }
 
