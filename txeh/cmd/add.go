@@ -41,7 +41,7 @@ var addCmd = &cobra.Command{
 	},
 }
 
-func AddHosts(ip string, hosts []string) {
+func AddHosts(ip string, hosts []string, comment ...string) {
 
 	etcHosts.AddHosts(ip, hosts)
 
