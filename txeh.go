@@ -260,6 +260,7 @@ func (h *Hosts) AddHosts(address string, hosts []string, comment ...string) {
 func (h *Hosts) AddHost(addressRaw string, hostRaw string, comment ...string) {
 	host := strings.TrimSpace(strings.ToLower(hostRaw))
 	address := strings.TrimSpace(strings.ToLower(addressRaw))
+	comment = strings.Fields(strings.Join(comment, " "))
 	addressIP := net.ParseIP(address)
 	if addressIP == nil {
 		return
@@ -304,6 +305,7 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string, comment ...string) {
 		if hfl.Address == address {
 			h.Lock()
 			h.hostFileLines[i].Hostnames = append(h.hostFileLines[i].Hostnames, host)
+			h.hostFileLines[i].Comment = strings.Join(comment, " ")
 			h.Unlock()
 			return
 		}

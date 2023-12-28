@@ -14,7 +14,7 @@ func init() {
 }
 
 var addCmd = &cobra.Command{
-	Use:   "add [IP] [HOSTNAME] [HOSTNAME] [HOSTNAME]...",
+	Use:   "add [IP] [HOSTNAME] [HOSTNAME] [HOSTNAME]... :[COMMENT]...",
 	Short: "Add hostnames to /etc/hosts",
 	Long:  `Add/Associate one or more hostnames to an IP address `,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -26,7 +26,18 @@ var addCmd = &cobra.Command{
 			return errors.New("the IP address provided is not a valid ipv4 or ipv6 address")
 		}
 
-		if ok, hn := validateHostnames(args[1:]); !ok {
+		var hosts []string
+		for _, host := range args[1:] {
+
+			for i := 0; i < len(host); i++ {
+				if host[i] == ':' {
+					break
+				}
+				hosts = append(hosts, host)
+			}
+		}
+
+		if ok, hn := validateHostnames(hosts); !ok {
 			return errors.New(fmt.Sprintf("\"%s\" is not a valid hostname", hn))
 		}
 
@@ -37,16 +48,36 @@ var addCmd = &cobra.Command{
 			fmt.Printf("Adding host(s) \"%s\" to IP address %s\n", strings.Join(args[1:], " "), args[0])
 		}
 
-		AddHosts(args[0], args[1:])
+		var hosts []string
+		var comments []string
+
+		for _, arg := range args[1:] {
+			// If we see a colon, we're done with hosts and we're on to comments joined by spaces
+			if arg[0] == ':' {
+				comments = append(comments, strings.Split(strings.Join(args[2:], " "), ":")[1])
+				break
+			}
+			hosts = append(hosts, arg)
+		}
+
+		AddHosts(args[0], hosts, comments...)
 	},
 }
 
 func AddHosts(ip string, hosts []string, comment ...string) {
 
-	etcHosts.AddHosts(ip, hosts)
+	etcHosts.AddHosts(ip, hosts, comment...)
 
 	if DryRun {
+		fmt.Println("-----HOSTS-----")
+		fmt.Println(hosts)
+		fmt.Println("-----HOSTS-----")
+		fmt.Println("-----COMMENTS-----")
+		fmt.Println(comment)
+		fmt.Println("-----COMMENTS-----")
+		fmt.Println("-----ETC HOSTS-----")
 		fmt.Print(etcHosts.RenderHostsFile())
+		fmt.Println("-----ETC HOSTS-----")
 		return
 	}
 
