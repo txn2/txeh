@@ -76,7 +76,15 @@ func UpdateHosts(oldIP string, newIP string, hosts []string, comment ...string) 
 	etcHosts.UpdateHosts(oldIP, newIP, hosts, comment...)
 
 	if DryRun {
+		fmt.Println("-----HOSTS-----")
+		fmt.Println(hosts)
+		fmt.Println("-----HOSTS-----")
+		fmt.Println("-----COMMENTS-----")
+		fmt.Println(comment)
+		fmt.Println("-----COMMENTS-----")
+		fmt.Println("-----ETC HOSTS-----")
 		fmt.Print(etcHosts.RenderHostsFile())
+		fmt.Println("-----ETC HOSTS-----")
 		return
 	}
 
