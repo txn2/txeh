@@ -346,7 +346,8 @@ func (h *Hosts) UpdateHost(originalAddressRaw string, newAddressRaw string, host
 
 	// does the host already exist
 	if ok, exAdd, hflIdx := h.HostAddressLookup(host, ipFamily); ok {
-		// if the address is the same we are done
+		// if the address is the same we need to update all the hostnames and ip
+
 		if originalAddress == exAdd {
 			h.Lock()
 			h.hostFileLines[hflIdx].Address = newAddress
@@ -357,10 +358,6 @@ func (h *Hosts) UpdateHost(originalAddressRaw string, newAddressRaw string, host
 
 		// if the hostname is at a different address, go and remove it from the address
 		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
-			// for localhost, we can match more than one host
-			if isLocalhost(originalAddress) {
-				break
-			}
 			if hst == host {
 				h.Lock()
 				h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
