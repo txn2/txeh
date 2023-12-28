@@ -325,19 +325,40 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string, comment ...string) {
 }
 
 // UpdateHost updates the address of a host
-func (h *Hosts) UpdateHost(originalAddress string, newAddress string, host string, comment ...string) {
+func (h *Hosts) UpdateHost(originalAddressRaw string, newAddressRaw string, hostRaw string, comment ...string) {
+	host := strings.TrimSpace(strings.ToLower(hostRaw))
+	originalAddress := strings.TrimSpace(strings.ToLower(originalAddressRaw))
+	newAddress := strings.TrimSpace(strings.ToLower(newAddressRaw))
+
+	comment = strings.Fields(strings.Join(comment, " "))
+	originalAddressIP := net.ParseIP(originalAddress)
+	if originalAddressIP == nil {
+		return
+	}
+	newAddressIP := net.ParseIP(newAddress)
+	if newAddressIP == nil {
+		return
+	}
+	ipFamily := IPFamilyV4
+	if originalAddressIP.To4() == nil {
+		ipFamily = IPFamilyV6
+	}
 
 	// does the host already exist
-	if ok, exAdd, hflIdx := h.HostAddressLookup(host, IPFamilyV4); ok {
+	if ok, exAdd, hflIdx := h.HostAddressLookup(host, ipFamily); ok {
 		// if the address is the same we are done
-		if newAddress == exAdd {
+		if originalAddress == exAdd {
+			h.Lock()
+			h.hostFileLines[hflIdx].Address = newAddress
+			h.hostFileLines[hflIdx].Comment = strings.Join(comment, " ")
+			h.Unlock()
 			return
 		}
 
 		// if the hostname is at a different address, go and remove it from the address
 		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
 			// for localhost, we can match more than one host
-			if isLocalhost(newAddress) {
+			if isLocalhost(originalAddress) {
 				break
 			}
 			if hst == host {
@@ -355,31 +376,30 @@ func (h *Hosts) UpdateHost(originalAddress string, newAddress string, host strin
 				break // unless we should continue because it could have duplicates
 			}
 		}
-	}
 
-	// if the address exists add it to the address line
-	for i, hfl := range h.hostFileLines {
-		if hfl.Address == originalAddress {
-			h.Lock()
-			h.hostFileLines[i].Hostnames = []string{host}
-			h.hostFileLines[i].Address = newAddress
-			h.hostFileLines[i].Comment = strings.Join(comment, " ")
-			h.Unlock()
-			return
+		// if the address exists add it to the address line
+		for i, hfl := range h.hostFileLines {
+			if hfl.Address == newAddress {
+				h.Lock()
+				h.hostFileLines[i].Hostnames = append(h.hostFileLines[i].Hostnames, host)
+				h.hostFileLines[i].Comment = strings.Join(comment, " ")
+				h.Unlock()
+				return
+			}
 		}
-	}
 
-	// the address and host do not already exist so go ahead and create them
-	hfl := HostFileLine{
-		LineType:  ADDRESS,
-		Address:   newAddress,
-		Hostnames: []string{host},
-		Comment:   strings.Join(comment, " "),
-	}
+		// the address and host do not already exist so go ahead and create them
+		hfl := HostFileLine{
+			LineType:  ADDRESS,
+			Address:   newAddress,
+			Hostnames: []string{host},
+			Comment:   strings.Join(comment, " "),
+		}
 
-	h.Lock()
-	h.hostFileLines = append(h.hostFileLines, hfl)
-	h.Unlock()
+		h.Lock()
+		h.hostFileLines = append(h.hostFileLines, hfl)
+		h.Unlock()
+	}
 }
 
 // UpdateHosts updates the address of a host
