@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -72,7 +73,7 @@ func NewHosts(hc *HostsConfig) (*Hosts, error) {
 	defaultHostsFile := "/etc/hosts"
 
 	if runtime.GOOS == "windows" {
-		defaultHostsFile = `C:\Windows\System32\Drivers\etc\hosts`
+		defaultHostsFile = winDefaultHostsFile()
 	}
 
 	if h.ReadFilePath == "" && h.RawText == nil {
@@ -518,4 +519,16 @@ var localhostIPRegexp = regexp.MustCompile(ipLocalhost)
 
 func isLocalhost(address string) bool {
 	return localhostIPRegexp.MatchString(address)
+}
+
+// winDefaultHostsFile returns the default hosts file path for Windows
+// it tries to use the SystemRoot environment variable, if that is not set
+// it falls back to C:\Windows\System32\Drivers\etc\hosts
+func winDefaultHostsFile() string {
+	if r := os.Getenv("SystemRoot"); r != "" {
+		return filepath.Join(r, "System32", "drivers", "etc", "hosts")
+	}
+
+	// fallback to C:\
+	return `C:\Windows\System32\drivers\etc\hosts`
 }

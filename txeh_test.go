@@ -1,6 +1,8 @@
 package txeh
 
 import (
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -302,4 +304,44 @@ func TestMethods(t *testing.T) {
 		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
 	}
 
+}
+
+func TestWinDefaultHostsFile(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Skipping windows test")
+	}
+
+	tc := []struct {
+		Name     string
+		EnvVaule string
+		Expect   string
+	}{
+		{
+			Name:     "Correct SystemRoot environment variable",
+			EnvVaule: "E:\\Windows",
+			Expect:   "E:\\Windows\\System32\\drivers\\etc\\hosts",
+		},
+		{
+			Name:     "SystemRoot with trailing slash",
+			EnvVaule: "E:\\Windows\\",
+			Expect:   "E:\\Windows\\System32\\drivers\\etc\\hosts",
+		},
+		{
+			Name:     "No systemRoot environment variable",
+			EnvVaule: "",
+			Expect:   "C:\\Windows\\System32\\drivers\\etc\\hosts",
+		},
+	}
+	for _, tt := range tc {
+		t.Run(tt.Name, func(t *testing.T) {
+			if err := os.Setenv("SystemRoot", tt.EnvVaule); err != nil {
+				panic(err)
+			}
+			hostFile := winDefaultHostsFile()
+			if hostFile != tt.Expect {
+				t.Fatalf("TestWinDefaultHostsFile failed to get expected path: "+
+					"expect: %v, got: %v", tt.Expect, hostFile)
+			}
+		})
+	}
 }
