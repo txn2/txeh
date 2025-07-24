@@ -20,7 +20,7 @@ default: help
 
 .PHONY: build
 build:
-	go build -C txeh/ -ldflags='-s -w -X github.com/txn2/txeh/txeh/cmd.Version={{.Version}}' -trimpath -mod=readonly -v -o dist/$(APP_NAME)
+	go build -C txeh/ -ldflags='-s -w -X github.com/txn2/txeh/txeh/cmd.Version={{.Version}}' -trimpath -v -o dist/$(APP_NAME)
 
 .PHONY: test
 test:
