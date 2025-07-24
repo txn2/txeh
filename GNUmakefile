@@ -8,12 +8,12 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  vendor    Download and vendor Go module dependencies"
 	@echo "  build     Build the Go project"
 	@echo "  test      Run all tests with verbose output"
 	@echo "  image     Build Docker image tagged as '$(APP_NAME):$(TAG)'"
 	@echo "  all       Run vendor, test, and build targets"
 	@echo "  help      Show this help message"
+	@echo ""
 
 .PHONY: default
 default: help
@@ -32,7 +32,7 @@ image:
 	docker build --progress plain -t $(IMAGE_NAME) .
 
 .PHONY: all
-all: vendor test build
+all: test build
 
 .PHONY: clean
 clean:
