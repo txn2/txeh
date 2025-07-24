@@ -38,7 +38,6 @@ var removeHostCmd = &cobra.Command{
 }
 
 func RemoveHosts(hosts []string) {
-
 	etcHosts.RemoveHosts(hosts)
 
 	if DryRun {

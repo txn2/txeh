@@ -38,7 +38,6 @@ var removeIpCmd = &cobra.Command{
 }
 
 func removeIPs(ips []string) {
-
 	etcHosts.RemoveAddresses(ips)
 
 	if DryRun {

@@ -12,10 +12,12 @@ import (
 	"sync"
 )
 
-const UNKNOWN = 0
-const EMPTY = 10
-const COMMENT = 20
-const ADDRESS = 30
+const (
+	UNKNOWN = 0
+	EMPTY   = 10
+	COMMENT = 20
+	ADDRESS = 30
+)
 
 type IPFamily int64
 
@@ -119,7 +121,7 @@ func (h *Hosts) SaveAs(fileName string) error {
 	h.Lock()
 	defer h.Unlock()
 
-	err := os.WriteFile(fileName, hfData, 0644)
+	err := os.WriteFile(fileName, hfData, 0o644)
 	if err != nil {
 		return err
 	}
@@ -436,7 +438,7 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 	inputNormalized := strings.Replace(input, "\r\n", "\n", -1)
 
 	dataLines := strings.Split(inputNormalized, "\n")
-	//remove extra blank line at end that does not exist in /etc/hosts file
+	// remove extra blank line at end that does not exist in /etc/hosts file
 	dataLines = dataLines[:len(dataLines)-1]
 
 	hostFileLines := make([]HostFileLine, len(dataLines))
@@ -501,7 +503,6 @@ func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
 
 // lineFormatter
 func lineFormatter(hfl HostFileLine) string {
-
 	if hfl.LineType < ADDRESS {
 		return hfl.Raw
 	}

@@ -42,7 +42,6 @@ var addCmd = &cobra.Command{
 }
 
 func AddHosts(ip string, hosts []string) {
-
 	etcHosts.AddHosts(ip, hosts)
 
 	if DryRun {

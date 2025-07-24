@@ -52,3 +52,8 @@ check:
 	staticcheck ./... || true
 	golangci-lint --version
 	golangci-lint run ./... || true
+
+.PHONY: format
+format:
+	gofumpt -e -l -w .
+	gofmt -w -s .

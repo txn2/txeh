@@ -38,7 +38,6 @@ var removeCidrCmd = &cobra.Command{
 }
 
 func RemoveIPRanges(cidrs []string) {
-
 	err := etcHosts.RemoveCIDRs(cidrs)
 	if err != nil {
 		fmt.Printf("Error: there was a problem parsing a CIDR. Reason: %s\n", err.Error())

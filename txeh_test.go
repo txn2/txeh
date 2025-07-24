@@ -303,7 +303,6 @@ func TestMethods(t *testing.T) {
 	if hfl[line] != expectString {
 		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
 	}
-
 }
 
 func TestWinDefaultHostsFile(t *testing.T) {
