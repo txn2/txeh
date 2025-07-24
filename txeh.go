@@ -350,7 +350,7 @@ func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
 			if hst == hostname {
 				addresses = append(addresses, []string{hsl.Address, hst})
 			}
-			if exact == false && hst != hostname && strings.Contains(hst, hostname) {
+			if !exact && hst != hostname && strings.Contains(hst, hostname) {
 				addresses = append(addresses, []string{hsl.Address, hst})
 			}
 		}

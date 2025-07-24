@@ -22,12 +22,12 @@ var addCmd = &cobra.Command{
 			return errors.New("the \"add\" command requires an IP address and at least one hostname")
 		}
 
-		if validateIPAddress(args[0]) == false {
+		if !validateIPAddress(args[0]) {
 			return errors.New("the IP address provided is not a valid ipv4 or ipv6 address")
 		}
 
 		if ok, hn := validateHostnames(args[1:]); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid hostname", hn))
+			return fmt.Errorf("\"%s\" is not a valid hostname", hn)
 		}
 
 		return nil

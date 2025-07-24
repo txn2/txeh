@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +21,7 @@ var listByIpCmd = &cobra.Command{
 		}
 
 		if ok, ip := validateIPAddresses(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid ip address", ip))
+			return fmt.Errorf("\"%s\" is not a valid ip address", ip)
 		}
 
 		return nil

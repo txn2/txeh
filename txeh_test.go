@@ -16,7 +16,7 @@ var mockHostsData = `127.0.0.1        localhost
 # IP_address canonical_hostname [aliases...]
 
 
-# The following lines are desirable for IPv6 capable hosts 
+# The following lines are desirable for IPv6 capable hosts
 ::1              localhost ip6-localhost ip6-loopback
 fe00::0          ip6-localnet
 ff00::0          ip6-mcastprefix
