@@ -11,7 +11,7 @@ help:
 	@echo "  build     Build the Go project"
 	@echo "  test      Run all tests with verbose output"
 	@echo "  image     Build Docker image tagged as '$(APP_NAME):$(TAG)'"
-	@echo "  all       Run vendor, test, and build targets"
+	@echo "  all       Run test and build $(APP_NAME)"
 	@echo "  help      Show this help message"
 	@echo ""
 
