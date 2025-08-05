@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ var listByHostsCmd = &cobra.Command{
 		}
 
 		if ok, cidr := validateHostnames(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid hostname", cidr))
+			return fmt.Errorf("\"%s\" is not a valid hostname", cidr)
 		}
 
 		return nil

@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +21,7 @@ var listByCidrCmd = &cobra.Command{
 		}
 
 		if ok, cidr := validateCIDRs(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid CIDR", cidr))
+			return fmt.Errorf("\"%s\" is not a valid CIDR", cidr)
 		}
 
 		return nil

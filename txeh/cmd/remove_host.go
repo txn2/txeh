@@ -23,7 +23,7 @@ var removeHostCmd = &cobra.Command{
 		}
 
 		if ok, hn := validateHostnames(args); !ok {
-			return errors.New(fmt.Sprintf("\"%s\" is not a valid hostname", hn))
+			return fmt.Errorf("\"%s\" is not a valid hostname", hn)
 		}
 
 		return nil
@@ -38,7 +38,6 @@ var removeHostCmd = &cobra.Command{
 }
 
 func RemoveHosts(hosts []string) {
-
 	etcHosts.RemoveHosts(hosts)
 
 	if DryRun {

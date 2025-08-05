@@ -62,7 +62,7 @@ func init() {
 
 func validateCIDRs(cidrs []string) (bool, string) {
 	for _, cr := range cidrs {
-		if validateCIDR(cr) == false {
+		if !validateCIDR(cr) {
 			return false, cr
 		}
 	}
@@ -72,16 +72,12 @@ func validateCIDRs(cidrs []string) (bool, string) {
 
 func validateCIDR(c string) bool {
 	_, _, err := net.ParseCIDR(c)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return (err == nil)
 }
 
 func validateIPAddresses(ips []string) (bool, string) {
 	for _, ip := range ips {
-		if validateIPAddress(ip) == false {
+		if !validateIPAddress(ip) {
 			return false, ip
 		}
 	}
@@ -90,16 +86,12 @@ func validateIPAddresses(ips []string) (bool, string) {
 }
 
 func validateIPAddress(ip string) bool {
-	if net.ParseIP(ip) == nil {
-		return false
-	}
-
-	return true
+	return (net.ParseIP(ip) == nil)
 }
 
 func validateHostnames(hostnames []string) (bool, string) {
 	for _, hn := range hostnames {
-		if validateHostname(hn) != true {
+		if !validateHostname(hn) {
 			return false, hn
 		}
 	}
