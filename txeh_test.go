@@ -4,6 +4,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -342,5 +343,238 @@ func TestWinDefaultHostsFile(t *testing.T) {
 					"expect: %v, got: %v", tt.Expect, hostFile)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// Bug Regression Tests
+// These tests document and verify bugs found during code analysis.
+// Tests are designed to FAIL until the corresponding bugs are fixed.
+// =============================================================================
+
+// BUG #2: ParseHostsFromString drops last line if no trailing newline
+// File: txeh.go:442
+func TestParseHosts_NoTrailingNewline(t *testing.T) {
+	input := "127.0.0.1 localhost"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to parse hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 {
+		t.Errorf("Last line dropped when no trailing newline. Expected 1 host, got %d", len(result))
+	}
+}
+
+func TestParseHosts_NoTrailingNewline_MultipleLines(t *testing.T) {
+	input := "127.0.0.1 host1\n127.0.0.2 host2"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to parse hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.2")
+	if len(result) != 1 {
+		t.Errorf("Last line dropped. Expected 1 host for 127.0.0.2, got %d", len(result))
+	}
+}
+
+// BUG #3: GetHostFileLines returns pointer to internal data
+// File: txeh.go:422-427
+func TestGetHostFileLines_ReturnsInternalPointer(t *testing.T) {
+	input := "127.0.0.1 original\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) > 0 {
+		lines[0].Address = "192.168.1.1"
+		lines[0].Hostnames = []string{"modified"}
+	}
+
+	result := hosts.RenderHostsFile()
+	if strings.Contains(result, "modified") {
+		t.Error("GetHostFileLines returns pointer to internal data, allowing external modification")
+	}
+}
+
+func TestGetHostFileLines_ThreadSafety(t *testing.T) {
+	input := "127.0.0.1 original\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	iterations := 100
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			lines := hosts.GetHostFileLines()
+			if len(lines) > 0 {
+				// This now modifies a copy, not internal state
+				lines[0].Hostnames = append(lines[0].Hostnames, "safe-copy")
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			hosts.AddHost("127.0.0.1", "safe")
+		}
+	}()
+
+	wg.Wait()
+	// With the fix, this should pass even with -race
+}
+
+// BUG #4: AddHost TOCTOU race condition
+// File: txeh.go:263-325
+func TestAddHost_TOCTOU_Race(t *testing.T) {
+	input := "127.0.0.1 existinghost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				hosts.AddHost("127.0.0.1", "existinghost")
+				hosts.AddHost("127.0.0.2", "existinghost")
+			}
+		}()
+	}
+	wg.Wait()
+	// Run with -race to detect TOCTOU race
+}
+
+// BUG #5: ListHostsByCIDR panics on invalid CIDR
+// File: txeh.go:371
+func TestListHostsByCIDR_InvalidCIDR_Panics(t *testing.T) {
+	input := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("ListHostsByCIDR panics on invalid CIDR: %v", r)
+		}
+	}()
+
+	_ = hosts.ListHostsByCIDR("not-a-valid-cidr")
+}
+
+// BUG #6: Windows line endings not preserved
+// File: txeh.go:437-438
+func TestWindowsLineEndings_NotPreserved(t *testing.T) {
+	input := "127.0.0.1 localhost\r\n192.168.1.1 server\r\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	rendered := hosts.RenderHostsFile()
+	if !strings.Contains(rendered, "\r\n") {
+		t.Log("Windows line endings (CRLF) not preserved in output")
+	}
+}
+
+// =============================================================================
+// Edge Case Tests
+// =============================================================================
+
+func TestParseHosts_EmptyFile(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts from empty input: %v", err)
+	}
+
+	result := hosts.RenderHostsFile()
+	if result != "" {
+		t.Errorf("Empty input should produce empty output, got: %q", result)
+	}
+}
+
+func TestParseHosts_OnlyComments(t *testing.T) {
+	input := "# Comment 1\n# Comment 2\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	rendered := hosts.RenderHostsFile()
+	if !strings.Contains(rendered, "# Comment 1") {
+		t.Error("Comments not preserved")
+	}
+}
+
+func TestParseHosts_InlineComment(t *testing.T) {
+	input := "127.0.0.1 localhost # this is a comment\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "localhost" {
+		t.Errorf("Expected ['localhost'], got %v", result)
+	}
+
+	rendered := hosts.RenderHostsFile()
+	if !strings.Contains(rendered, "this is a comment") {
+		t.Error("Inline comment not preserved")
+	}
+}
+
+func TestParseHosts_TabSeparated(t *testing.T) {
+	input := "127.0.0.1\tlocalhost\thost2\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 2 {
+		t.Errorf("Expected 2 hosts (tab-separated), got %d", len(result))
+	}
+}
+
+func TestParseHosts_IPv6_Loopback(t *testing.T) {
+	input := "::1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("::1")
+	if len(result) != 1 {
+		t.Errorf("IPv6 loopback not handled correctly: %v", result)
+	}
+}
+
+func TestParseHosts_IPv6_Full(t *testing.T) {
+	input := "2001:0db8:85a3:0000:0000:8a2e:0370:7334 ipv6host\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+	if len(result) != 1 {
+		t.Errorf("Full IPv6 address not handled correctly: %v", result)
 	}
 }

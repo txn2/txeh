@@ -196,7 +196,7 @@ func (h *Hosts) RemoveCIDRs(cidrs []string) error {
 
 		hfLines := h.GetHostFileLines()
 
-		for _, hfl := range *hfLines {
+		for _, hfl := range hfLines {
 			ip := net.ParseIP(hfl.Address)
 			if ip != nil {
 				if ipnet.Contains(ip) {
@@ -272,8 +272,11 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 		ipFamily = IPFamilyV6
 	}
 
+	h.Lock()
+	defer h.Unlock()
+
 	// does the host already exist
-	if ok, exAdd, hflIdx := h.HostAddressLookup(host, ipFamily); ok {
+	if ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily); ok {
 		// if the address is the same we are done
 		if address == exAdd {
 			return
@@ -286,15 +289,11 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 				break
 			}
 			if hst == host {
-				h.Lock()
 				h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
-				h.Unlock()
 
 				// remove the address line if empty
 				if len(h.hostFileLines[hflIdx].Hostnames) < 1 {
-					h.Lock()
 					h.hostFileLines = removeHFLElement(h.hostFileLines, hflIdx)
-					h.Unlock()
 				}
 
 				break // unless we should continue because it could have duplicates
@@ -305,9 +304,7 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 	// if the address exists add it to the address line
 	for i, hfl := range h.hostFileLines {
 		if hfl.Address == address {
-			h.Lock()
 			h.hostFileLines[i].Hostnames = append(h.hostFileLines[i].Hostnames, host)
-			h.Unlock()
 			return
 		}
 	}
@@ -319,9 +316,7 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 		Hostnames: []string{host},
 	}
 
-	h.Lock()
 	h.hostFileLines = append(h.hostFileLines, hfl)
-	h.Unlock()
 }
 
 // ListHostsByIP returns a list of hostnames associated with a given IP address
@@ -368,7 +363,11 @@ func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
 
 	var ipHosts [][]string
 
-	_, subnet, _ := net.ParseCIDR(cidr)
+	_, subnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return ipHosts
+	}
+
 	for _, hsl := range h.hostFileLines {
 		if subnet.Contains(net.ParseIP(hsl.Address)) {
 			for _, hst := range hsl.Hostnames {
@@ -386,6 +385,11 @@ func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string,
 	h.Lock()
 	defer h.Unlock()
 
+	return h.hostAddressLookupLocked(host, ipFamily)
+}
+
+// hostAddressLookupLocked is the internal version that assumes the lock is already held
+func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (bool, string, int) {
 	host = strings.ToLower(strings.TrimSpace(host))
 
 	for i, hfl := range h.hostFileLines {
@@ -419,11 +423,14 @@ func (h *Hosts) RenderHostsFile() string {
 	return hf
 }
 
-func (h *Hosts) GetHostFileLines() *HostFileLines {
+func (h *Hosts) GetHostFileLines() HostFileLines {
 	h.Lock()
 	defer h.Unlock()
 
-	return &h.hostFileLines
+	// Return a copy to prevent external modification of internal state
+	result := make(HostFileLines, len(h.hostFileLines))
+	copy(result, h.hostFileLines)
+	return result
 }
 
 func ParseHosts(path string) ([]HostFileLine, error) {
@@ -439,7 +446,10 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 
 	dataLines := strings.Split(inputNormalized, "\n")
 	// remove extra blank line at end that does not exist in /etc/hosts file
-	dataLines = dataLines[:len(dataLines)-1]
+	// only if the file ended with a newline (last element is empty)
+	if len(dataLines) > 0 && dataLines[len(dataLines)-1] == "" {
+		dataLines = dataLines[:len(dataLines)-1]
+	}
 
 	hostFileLines := make([]HostFileLine, len(dataLines))
 

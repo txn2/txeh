@@ -57,7 +57,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&HostsFileWritePath, "write", "w", "", "(override) Path to write /etc/hosts file.")
 
 	// validate hostnames (allow underscore for service records)
-	hostnameRegex = regexp.MustCompile(`^([A-Za-z]|[0-9]|-|_|\.)+$`)
+	// disallow leading dots, trailing dots, and consecutive dots
+	hostnameRegex = regexp.MustCompile(`^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$`)
 }
 
 func validateCIDRs(cidrs []string) (bool, string) {
@@ -72,7 +73,7 @@ func validateCIDRs(cidrs []string) (bool, string) {
 
 func validateCIDR(c string) bool {
 	_, _, err := net.ParseCIDR(c)
-	return (err == nil)
+	return err == nil
 }
 
 func validateIPAddresses(ips []string) (bool, string) {
@@ -86,7 +87,7 @@ func validateIPAddresses(ips []string) (bool, string) {
 }
 
 func validateIPAddress(ip string) bool {
-	return (net.ParseIP(ip) == nil)
+	return net.ParseIP(ip) != nil
 }
 
 func validateHostnames(hostnames []string) (bool, string) {
