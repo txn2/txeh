@@ -45,6 +45,8 @@ var (
 	Quiet bool
 	// DryRun sends output to STDOUT (ignores quiet)
 	DryRun bool
+	// MaxHostsPerLine limits hostnames per line (0=auto, -1=unlimited, >0=explicit)
+	MaxHostsPerLine int
 
 	etcHosts      *txeh.Hosts
 	hostnameRegex *regexp.Regexp
@@ -55,6 +57,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&Quiet, "quiet", "q", false, "no output")
 	rootCmd.PersistentFlags().StringVarP(&HostsFileReadPath, "read", "r", "", "(override) Path to read /etc/hosts file.")
 	rootCmd.PersistentFlags().StringVarP(&HostsFileWritePath, "write", "w", "", "(override) Path to write /etc/hosts file.")
+	rootCmd.PersistentFlags().IntVarP(&MaxHostsPerLine, "max-hosts-per-line", "m", 0, "Max hostnames per line (0=auto, -1=unlimited, >0=explicit). Auto uses 9 on Windows.")
 
 	// validate hostnames (allow underscore for service records)
 	// disallow leading dots, trailing dots, and consecutive dots
@@ -114,12 +117,13 @@ func initEtcHosts() {
 		err   error
 	)
 
-	if emptyFilePaths() {
+	if emptyFilePaths() && MaxHostsPerLine == 0 {
 		hosts, err = txeh.NewHostsDefault()
 	} else {
 		hosts, err = txeh.NewHosts(&txeh.HostsConfig{
-			ReadFilePath:  HostsFileReadPath,
-			WriteFilePath: HostsFileWritePath,
+			ReadFilePath:    HostsFileReadPath,
+			WriteFilePath:   HostsFileWritePath,
+			MaxHostsPerLine: MaxHostsPerLine,
 		})
 	}
 

@@ -383,7 +383,7 @@ func TestAddHosts_Basic(t *testing.T) {
 	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
 	defer cleanup()
 
-	AddHosts("192.168.1.1", []string{"newhost", "newhost2"})
+	AddHosts("192.168.1.1", []string{"newhost", "newhost2"}, "")
 
 	// Verify the hosts were added
 	result := etcHosts.ListHostsByIP("192.168.1.1")
@@ -399,7 +399,7 @@ func TestAddHosts_DryRun(t *testing.T) {
 	DryRun = true
 
 	output := captureOutput(func() {
-		AddHosts("192.168.1.1", []string{"newhost"})
+		AddHosts("192.168.1.1", []string{"newhost"}, "")
 	})
 
 	// Output should contain the new host
@@ -418,11 +418,61 @@ func TestAddHosts_ToExistingAddress(t *testing.T) {
 	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
 	defer cleanup()
 
-	AddHosts("127.0.0.1", []string{"newalias"})
+	AddHosts("127.0.0.1", []string{"newalias"}, "")
 
 	result := etcHosts.ListHostsByIP("127.0.0.1")
 	if len(result) != 2 {
 		t.Errorf("Expected 2 hosts at 127.0.0.1, got %d: %v", len(result), result)
+	}
+}
+
+func TestAddHosts_WithComment(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "")
+	defer cleanup()
+
+	AddHosts("192.168.1.1", []string{"myservice"}, "managed-by-myapp")
+
+	// Verify the host was added
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 1 || result[0] != "myservice" {
+		t.Errorf("Expected 'myservice', got: %v", result)
+	}
+
+	// Verify the comment is in the rendered output
+	rendered := etcHosts.RenderHostsFile()
+	if !strings.Contains(rendered, "managed-by-myapp") {
+		t.Errorf("Comment not found in rendered output: %s", rendered)
+	}
+}
+
+func TestAddHosts_WithComment_SameCommentAppends(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "")
+	defer cleanup()
+
+	AddHosts("192.168.1.1", []string{"host1"}, "my-app")
+	AddHosts("192.168.1.1", []string{"host2"}, "my-app")
+
+	// Both should be on the same line
+	lines := etcHosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line (same comment), got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 2 {
+		t.Errorf("Expected 2 hosts on line, got %d", len(lines[0].Hostnames))
+	}
+}
+
+func TestAddHosts_WithComment_DifferentCommentNewLine(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "")
+	defer cleanup()
+
+	AddHosts("192.168.1.1", []string{"host1"}, "app-a")
+	AddHosts("192.168.1.1", []string{"host2"}, "app-b")
+
+	// Should be on different lines
+	lines := etcHosts.GetHostFileLines()
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines (different comments), got %d", len(lines))
 	}
 }
 
@@ -703,5 +753,379 @@ func TestInitEtcHosts_WithPaths(t *testing.T) {
 	result := etcHosts.ListHostsByIP("127.0.0.1")
 	if len(result) != 1 || result[0] != "localhost" {
 		t.Errorf("etcHosts should contain localhost: %v", result)
+	}
+}
+
+// =============================================================================
+// Tests for List/Remove by Comment CLI Commands
+// =============================================================================
+
+func TestListByComment_Basic(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+127.0.0.1        app1 app2 # dev services
+127.0.0.1        api1 # dev services
+192.168.1.1      staging # staging env
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup test environment
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	initEtcHosts()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	ListByComment("dev services")
+
+	if err := w.Close(); err != nil {
+		t.Logf("Warning: failed to close pipe writer: %v", err)
+	}
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	output := buf.String()
+
+	// Should list app1, app2, api1
+	if !strings.Contains(output, "app1") {
+		t.Errorf("Output should contain 'app1': %s", output)
+	}
+	if !strings.Contains(output, "app2") {
+		t.Errorf("Output should contain 'app2': %s", output)
+	}
+	if !strings.Contains(output, "api1") {
+		t.Errorf("Output should contain 'api1': %s", output)
+	}
+	// Should not contain staging
+	if strings.Contains(output, "staging") {
+		t.Errorf("Output should not contain 'staging': %s", output)
+	}
+}
+
+func TestRemoveByComment_Basic(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+127.0.0.1        app1 app2 # dev services
+192.168.1.1      staging # staging env
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup test environment
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	initEtcHosts()
+
+	// Remove all entries with "dev services" comment
+	RemoveByComment("dev services")
+
+	// Reload and verify
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// app1 and app2 should be gone
+	result := hosts.ListHostsByComment("dev services")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts with 'dev services' comment, got %d", len(result))
+	}
+
+	// localhost should still be there
+	result = hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "localhost" {
+		t.Errorf("localhost should remain: %v", result)
+	}
+
+	// staging should still be there
+	result = hosts.ListHostsByComment("staging env")
+	if len(result) != 1 || result[0] != "staging" {
+		t.Errorf("staging should remain: %v", result)
+	}
+}
+
+func TestListByComment_NoMatch(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+127.0.0.1        app1 # dev services
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	initEtcHosts()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	ListByComment("nonexistent comment")
+
+	if err := w.Close(); err != nil {
+		t.Logf("Warning: failed to close pipe writer: %v", err)
+	}
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	output := buf.String()
+
+	// Should be empty (no match)
+	if strings.TrimSpace(output) != "" {
+		t.Errorf("Expected empty output for non-existent comment, got: %s", output)
+	}
+}
+
+func TestRemoveByComment_NoMatch(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+127.0.0.1        app1 # dev services
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	initEtcHosts()
+
+	// Remove with non-existent comment (should not affect anything)
+	RemoveByComment("nonexistent comment")
+
+	// Reload and verify nothing was removed
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 2 {
+		t.Errorf("Expected 2 hosts to remain, got %d", len(result))
+	}
+}
+
+func TestListByComment_EmptyComment(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+127.0.0.1        app1 # dev services
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	initEtcHosts()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// List hosts with empty comment (should return localhost)
+	ListByComment("")
+
+	if err := w.Close(); err != nil {
+		t.Logf("Warning: failed to close pipe writer: %v", err)
+	}
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	output := buf.String()
+
+	// Should contain localhost
+	if !strings.Contains(output, "localhost") {
+		t.Errorf("Expected 'localhost' in output, got: %s", output)
+	}
+	// Should not contain app1
+	if strings.Contains(output, "app1") {
+		t.Errorf("Should not contain 'app1' (has comment), got: %s", output)
+	}
+}
+
+func TestMaxHostsPerLine_Flag(t *testing.T) {
+	hostsContent := `127.0.0.1        localhost
+`
+	tmpFile, err := os.CreateTemp("", "hosts-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	}()
+
+	if _, err := tmpFile.WriteString(hostsContent); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup test environment
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	origMax := MaxHostsPerLine
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+		MaxHostsPerLine = origMax
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	MaxHostsPerLine = 2 // Set limit to 2 hosts per line
+	initEtcHosts()
+
+	// Add 5 hosts - should create 3 lines with limit of 2
+	AddHosts("127.0.0.1", []string{"h1", "h2", "h3", "h4", "h5"}, "")
+
+	// Reload and verify
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := hosts.GetHostFileLines()
+	addressLines := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			addressLines++
+			if len(line.Hostnames) > 2 {
+				t.Errorf("Line has %d hosts, expected max 2", len(line.Hostnames))
+			}
+		}
+	}
+
+	// Should have 3 lines: localhost, (h1 h2), (h3 h4), (h5)
+	// Actually localhost already has 1 host, so h1 goes there making it 2
+	// Then h2 h3, h4 h5 = total 3 lines
+	if addressLines < 3 {
+		t.Errorf("Expected at least 3 lines with max 2 hosts per line, got %d", addressLines)
 	}
 }
