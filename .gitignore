@@ -2,3 +2,4 @@
 dist
 .vscode
 coverage.out
+.claude
