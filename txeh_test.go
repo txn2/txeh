@@ -578,3 +578,534 @@ func TestParseHosts_IPv6_Full(t *testing.T) {
 		t.Errorf("Full IPv6 address not handled correctly: %v", result)
 	}
 }
+
+// =============================================================================
+// Phase 1: Library Coverage Tests
+// =============================================================================
+
+// --- Reload Tests ---
+
+func TestReload_WithRawText_ReturnsError(t *testing.T) {
+	input := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	err = hosts.Reload()
+	if err == nil {
+		t.Error("Reload with RawText should return error")
+	}
+	if err.Error() != "cannot call Reload with RawText" {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestReload_Success(t *testing.T) {
+	// Create a temp file
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write initial content
+	initialContent := "127.0.0.1 localhost\n"
+	if _, err := tmpFile.WriteString(initialContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Load the hosts file
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("Failed to load hosts: %v", err)
+	}
+
+	// Verify initial state
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "localhost" {
+		t.Errorf("Initial state incorrect: %v", result)
+	}
+
+	// Modify the file externally
+	newContent := "127.0.0.1 localhost newhost\n192.168.1.1 server\n"
+	if err := os.WriteFile(tmpFile.Name(), []byte(newContent), 0644); err != nil {
+		t.Fatalf("Failed to update temp file: %v", err)
+	}
+
+	// Reload
+	if err := hosts.Reload(); err != nil {
+		t.Fatalf("Reload failed: %v", err)
+	}
+
+	// Verify new state
+	result = hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 2 {
+		t.Errorf("After reload expected 2 hosts, got %d: %v", len(result), result)
+	}
+
+	result = hosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 1 || result[0] != "server" {
+		t.Errorf("After reload, new entry not found: %v", result)
+	}
+}
+
+func TestReload_FileNotFound(t *testing.T) {
+	// Create a temp file then delete it
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tmpFile.WriteString("127.0.0.1 localhost\n")
+	tmpFile.Close()
+
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("Failed to load hosts: %v", err)
+	}
+
+	// Delete the file
+	os.Remove(tmpFile.Name())
+
+	// Reload should fail
+	err = hosts.Reload()
+	if err == nil {
+		t.Error("Reload should fail when file is deleted")
+	}
+}
+
+// --- SaveAs Tests ---
+
+func TestSaveAs_Success(t *testing.T) {
+	input := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// This should fail because we're using RawText
+	err = hosts.SaveAs("/tmp/test_hosts")
+	if err == nil {
+		t.Error("SaveAs with RawText should return error")
+	}
+}
+
+func TestSaveAs_RealFile(t *testing.T) {
+	// Create initial file
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("127.0.0.1 localhost\n")
+	tmpFile.Close()
+
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("Failed to load hosts: %v", err)
+	}
+
+	// Add a host
+	hosts.AddHost("192.168.1.1", "newserver")
+
+	// Save to a different file
+	outputFile, err := os.CreateTemp("", "hosts_output_*")
+	if err != nil {
+		t.Fatalf("Failed to create output file: %v", err)
+	}
+	defer os.Remove(outputFile.Name())
+	outputFile.Close()
+
+	if err := hosts.SaveAs(outputFile.Name()); err != nil {
+		t.Fatalf("SaveAs failed: %v", err)
+	}
+
+	// Read and verify
+	content, err := os.ReadFile(outputFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "newserver") {
+		t.Error("Saved file should contain 'newserver'")
+	}
+}
+
+func TestSaveAs_InvalidPath(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("127.0.0.1 localhost\n")
+	tmpFile.Close()
+
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("Failed to load hosts: %v", err)
+	}
+
+	// Try to save to an invalid path
+	err = hosts.SaveAs("/nonexistent/directory/hosts")
+	if err == nil {
+		t.Error("SaveAs to invalid path should fail")
+	}
+}
+
+// --- AddHost Edge Cases ---
+
+func TestAddHost_Localhost_AllowsDuplicates(t *testing.T) {
+	input := "127.0.0.1 existinghost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add same host to different localhost addresses
+	hosts.AddHost("127.0.0.1", "existinghost")
+	hosts.AddHost("127.0.0.2", "existinghost")
+
+	// For localhost addresses, duplicates should be allowed
+	result1 := hosts.ListHostsByIP("127.0.0.1")
+	result2 := hosts.ListHostsByIP("127.0.0.2")
+
+	// The host should appear at both localhost addresses
+	if len(result1) == 0 {
+		t.Error("Host should exist at 127.0.0.1")
+	}
+	if len(result2) == 0 {
+		t.Error("Host should exist at 127.0.0.2 (localhost allows duplicates)")
+	}
+}
+
+func TestAddHost_IPv6_Basic(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHost("::1", "ipv6localhost")
+	hosts.AddHost("2001:db8::1", "ipv6server")
+
+	result := hosts.ListHostsByIP("::1")
+	if len(result) != 1 || result[0] != "ipv6localhost" {
+		t.Errorf("IPv6 loopback not added correctly: %v", result)
+	}
+
+	result = hosts.ListHostsByIP("2001:db8::1")
+	if len(result) != 1 || result[0] != "ipv6server" {
+		t.Errorf("IPv6 address not added correctly: %v", result)
+	}
+}
+
+func TestAddHost_IPv6_Reassignment(t *testing.T) {
+	input := "2001:db8::1 myhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Reassign to different IPv6 address
+	hosts.AddHost("2001:db8::2", "myhost")
+
+	// Should be removed from old address
+	result1 := hosts.ListHostsByIP("2001:db8::1")
+	if len(result1) != 0 {
+		t.Errorf("Host should be removed from old IPv6 address: %v", result1)
+	}
+
+	// Should be at new address
+	result2 := hosts.ListHostsByIP("2001:db8::2")
+	if len(result2) != 1 || result2[0] != "myhost" {
+		t.Errorf("Host should be at new IPv6 address: %v", result2)
+	}
+}
+
+func TestAddHost_InvalidIP_Ignored(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Try to add with invalid IP
+	hosts.AddHost("not-an-ip", "testhost")
+	hosts.AddHost("999.999.999.999", "testhost2")
+
+	// Should have no entries
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 0 {
+		t.Errorf("Invalid IPs should be ignored, got %d entries", len(lines))
+	}
+}
+
+func TestAddHost_EmptyHostname(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHost("127.0.0.1", "")
+	hosts.AddHost("127.0.0.1", "   ")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	// Empty/whitespace hostnames are normalized and added
+	// This documents current behavior
+	t.Logf("Empty hostname behavior: %v", result)
+}
+
+func TestAddHost_CaseNormalization(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHost("127.0.0.1", "MyHost")
+	hosts.AddHost("127.0.0.1", "MYHOST")
+	hosts.AddHost("127.0.0.1", "myhost")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	// All should be normalized to lowercase, so only one entry
+	if len(result) != 1 {
+		t.Errorf("Case normalization should prevent duplicates, got: %v", result)
+	}
+	if result[0] != "myhost" {
+		t.Errorf("Hostname should be lowercase, got: %s", result[0])
+	}
+}
+
+func TestAddHost_SameAddressSameHost_NoOp(t *testing.T) {
+	input := "127.0.0.1 existinghost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add same host to same address multiple times
+	hosts.AddHost("127.0.0.1", "existinghost")
+	hosts.AddHost("127.0.0.1", "existinghost")
+	hosts.AddHost("127.0.0.1", "existinghost")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 {
+		t.Errorf("Adding same host to same address should be no-op, got: %v", result)
+	}
+}
+
+// --- ParseHosts (file-based) Tests ---
+
+func TestParseHosts_FileNotFound(t *testing.T) {
+	_, err := ParseHosts("/nonexistent/path/hosts")
+	if err == nil {
+		t.Error("ParseHosts should fail for nonexistent file")
+	}
+}
+
+func TestParseHosts_ValidFile(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	content := "127.0.0.1 localhost\n192.168.1.1 server\n"
+	tmpFile.WriteString(content)
+	tmpFile.Close()
+
+	lines, err := ParseHosts(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("ParseHosts failed: %v", err)
+	}
+
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines, got %d", len(lines))
+	}
+}
+
+// --- NewHosts Tests ---
+
+func TestNewHosts_WithReadPath(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	tmpFile.WriteString("127.0.0.1 localhost\n")
+	tmpFile.Close()
+
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	if err != nil {
+		t.Fatalf("NewHosts failed: %v", err)
+	}
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 {
+		t.Errorf("Expected 1 host, got %d", len(result))
+	}
+}
+
+func TestNewHosts_WithReadAndWritePath(t *testing.T) {
+	// Create read file
+	readFile, err := os.CreateTemp("", "hosts_read_*")
+	if err != nil {
+		t.Fatalf("Failed to create read file: %v", err)
+	}
+	defer os.Remove(readFile.Name())
+	readFile.WriteString("127.0.0.1 localhost\n")
+	readFile.Close()
+
+	// Create write file
+	writeFile, err := os.CreateTemp("", "hosts_write_*")
+	if err != nil {
+		t.Fatalf("Failed to create write file: %v", err)
+	}
+	defer os.Remove(writeFile.Name())
+	writeFile.Close()
+
+	hosts, err := NewHosts(&HostsConfig{
+		ReadFilePath:  readFile.Name(),
+		WriteFilePath: writeFile.Name(),
+	})
+	if err != nil {
+		t.Fatalf("NewHosts failed: %v", err)
+	}
+
+	hosts.AddHost("192.168.1.1", "newhost")
+	if err := hosts.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Read the write file and verify
+	content, err := os.ReadFile(writeFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to read write file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "newhost") {
+		t.Error("Write file should contain new host")
+	}
+}
+
+func TestNewHosts_InvalidReadPath(t *testing.T) {
+	_, err := NewHosts(&HostsConfig{ReadFilePath: "/nonexistent/path"})
+	if err == nil {
+		t.Error("NewHosts should fail with invalid read path")
+	}
+}
+
+// --- HostAddressLookup Tests ---
+
+func TestHostAddressLookup_IPv4Family(t *testing.T) {
+	input := "127.0.0.1 myhost\n::1 myhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Look up with IPv4 family
+	found, addr, _ := hosts.HostAddressLookup("myhost", IPFamilyV4)
+	if !found {
+		t.Error("Should find host in IPv4 family")
+	}
+	if addr != "127.0.0.1" {
+		t.Errorf("Expected 127.0.0.1, got %s", addr)
+	}
+
+	// Look up with IPv6 family
+	found, addr, _ = hosts.HostAddressLookup("myhost", IPFamilyV6)
+	if !found {
+		t.Error("Should find host in IPv6 family")
+	}
+	if addr != "::1" {
+		t.Errorf("Expected ::1, got %s", addr)
+	}
+}
+
+func TestHostAddressLookup_NotFound(t *testing.T) {
+	input := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	found, _, _ := hosts.HostAddressLookup("nonexistent", IPFamilyV4)
+	if found {
+		t.Error("Should not find nonexistent host")
+	}
+}
+
+// --- RemoveCIDRs Edge Cases ---
+
+func TestRemoveCIDRs_InvalidCIDR_ReturnsError(t *testing.T) {
+	input := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	err = hosts.RemoveCIDRs([]string{"invalid-cidr"})
+	if err == nil {
+		t.Error("RemoveCIDRs should return error for invalid CIDR")
+	}
+}
+
+func TestRemoveCIDRs_MultipleCIDRs(t *testing.T) {
+	input := "127.0.0.1 host1\n192.168.1.1 host2\n10.0.0.1 host3\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Remove multiple ranges
+	err = hosts.RemoveCIDRs([]string{"127.0.0.0/8", "10.0.0.0/8"})
+	if err != nil {
+		t.Fatalf("RemoveCIDRs failed: %v", err)
+	}
+
+	// Only 192.168.1.1 should remain
+	result := hosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 1 {
+		t.Error("192.168.1.1 should remain")
+	}
+
+	result = hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 0 {
+		t.Error("127.0.0.1 should be removed")
+	}
+
+	result = hosts.ListHostsByIP("10.0.0.1")
+	if len(result) != 0 {
+		t.Error("10.0.0.1 should be removed")
+	}
+}
+
+// --- isLocalhost Tests ---
+
+func TestIsLocalhost(t *testing.T) {
+	tests := []struct {
+		address  string
+		expected bool
+	}{
+		{"127.0.0.1", true},
+		{"127.0.0.2", true},
+		{"127.255.255.255", true},
+		{"127.1.2.3", true},
+		{"::1", true},
+		{"192.168.1.1", false},
+		{"10.0.0.1", false},
+		{"0.0.0.0", false},
+		{"128.0.0.1", false},
+	}
+
+	for _, tc := range tests {
+		result := isLocalhost(tc.address)
+		if result != tc.expected {
+			t.Errorf("isLocalhost(%q) = %v, expected %v", tc.address, result, tc.expected)
+		}
+	}
+}

@@ -1,8 +1,14 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
 	"net"
+	"os"
+	"strings"
 	"testing"
+
+	"github.com/txn2/txeh"
 )
 
 // Bug Regression Tests for CMD package
@@ -301,5 +307,398 @@ func TestValidateCIDR_Invalid(t *testing.T) {
 		if validateCIDR(cidr) {
 			t.Errorf("validateCIDR(%q) = true, expected false", cidr)
 		}
+	}
+}
+
+// =============================================================================
+// Phase 2: CLI Integration Tests
+// =============================================================================
+
+// Helper to create a temp hosts file and initialize etcHosts
+func setupTestHosts(t *testing.T, content string) (string, func()) {
+	t.Helper()
+
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Set up the global state
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+	DryRun = false
+	Quiet = true
+
+	// Initialize etcHosts
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
+		ReadFilePath:  tmpFile.Name(),
+		WriteFilePath: tmpFile.Name(),
+	})
+	if err != nil {
+		os.Remove(tmpFile.Name())
+		t.Fatalf("Failed to initialize hosts: %v", err)
+	}
+	etcHosts = hosts
+
+	cleanup := func() {
+		os.Remove(tmpFile.Name())
+		HostsFileReadPath = ""
+		HostsFileWritePath = ""
+		DryRun = false
+		Quiet = false
+	}
+
+	return tmpFile.Name(), cleanup
+}
+
+// Helper to capture stdout
+func captureOutput(f func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	f()
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return buf.String()
+}
+
+// --- Add Command Tests ---
+
+func TestAddHosts_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	AddHosts("192.168.1.1", []string{"newhost", "newhost2"})
+
+	// Verify the hosts were added
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 2 {
+		t.Errorf("Expected 2 hosts, got %d: %v", len(result), result)
+	}
+}
+
+func TestAddHosts_DryRun(t *testing.T) {
+	path, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	DryRun = true
+
+	output := captureOutput(func() {
+		AddHosts("192.168.1.1", []string{"newhost"})
+	})
+
+	// Output should contain the new host
+	if !strings.Contains(output, "newhost") {
+		t.Error("Dry run output should contain 'newhost'")
+	}
+
+	// File should NOT be modified (read original content)
+	content, _ := os.ReadFile(path)
+	if strings.Contains(string(content), "newhost") {
+		t.Error("Dry run should not modify the file")
+	}
+}
+
+func TestAddHosts_ToExistingAddress(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	AddHosts("127.0.0.1", []string{"newalias"})
+
+	result := etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 2 {
+		t.Errorf("Expected 2 hosts at 127.0.0.1, got %d: %v", len(result), result)
+	}
+}
+
+// --- Remove Host Command Tests ---
+
+func TestRemoveHosts_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost myhost\n192.168.1.1 server\n")
+	defer cleanup()
+
+	RemoveHosts([]string{"myhost"})
+
+	result := etcHosts.ListHostsByIP("127.0.0.1")
+	for _, h := range result {
+		if h == "myhost" {
+			t.Error("myhost should have been removed")
+		}
+	}
+}
+
+func TestRemoveHosts_Multiple(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 host1 host2 host3\n")
+	defer cleanup()
+
+	RemoveHosts([]string{"host1", "host3"})
+
+	result := etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "host2" {
+		t.Errorf("Expected only 'host2' to remain, got: %v", result)
+	}
+}
+
+func TestRemoveHosts_DryRun(t *testing.T) {
+	path, cleanup := setupTestHosts(t, "127.0.0.1 localhost myhost\n")
+	defer cleanup()
+
+	DryRun = true
+
+	output := captureOutput(func() {
+		RemoveHosts([]string{"myhost"})
+	})
+
+	// Output should NOT contain myhost (it's removed in dry run view)
+	if strings.Contains(output, "myhost") {
+		t.Error("Dry run output should show myhost removed")
+	}
+
+	// But file should still have it
+	content, _ := os.ReadFile(path)
+	if !strings.Contains(string(content), "myhost") {
+		t.Error("Dry run should not modify the file")
+	}
+}
+
+func TestRemoveHosts_Nonexistent(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	// Should not panic or error when removing nonexistent host
+	RemoveHosts([]string{"nonexistent"})
+
+	// localhost should still be there
+	result := etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "localhost" {
+		t.Errorf("localhost should remain unchanged: %v", result)
+	}
+}
+
+// --- Remove IP Command Tests ---
+
+func TestRemoveIPs_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server\n")
+	defer cleanup()
+
+	removeIPs([]string{"192.168.1.1"})
+
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 0 {
+		t.Errorf("192.168.1.1 should be removed, got: %v", result)
+	}
+
+	// localhost should remain
+	result = etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 {
+		t.Error("localhost should remain")
+	}
+}
+
+func TestRemoveIPs_Multiple(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server1\n192.168.1.2 server2\n")
+	defer cleanup()
+
+	removeIPs([]string{"192.168.1.1", "192.168.1.2"})
+
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 0 {
+		t.Error("192.168.1.1 should be removed")
+	}
+
+	result = etcHosts.ListHostsByIP("192.168.1.2")
+	if len(result) != 0 {
+		t.Error("192.168.1.2 should be removed")
+	}
+}
+
+// --- Remove CIDR Command Tests ---
+
+func TestRemoveIPRanges_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server1\n192.168.1.2 server2\n10.0.0.1 other\n")
+	defer cleanup()
+
+	RemoveIPRanges([]string{"192.168.1.0/24"})
+
+	// 192.168.1.x should be gone
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 0 {
+		t.Error("192.168.1.1 should be removed")
+	}
+
+	result = etcHosts.ListHostsByIP("192.168.1.2")
+	if len(result) != 0 {
+		t.Error("192.168.1.2 should be removed")
+	}
+
+	// Others should remain
+	result = etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 {
+		t.Error("127.0.0.1 should remain")
+	}
+
+	result = etcHosts.ListHostsByIP("10.0.0.1")
+	if len(result) != 1 {
+		t.Error("10.0.0.1 should remain")
+	}
+}
+
+// --- List Commands Tests ---
+
+func TestListByIPs_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server web\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		ListByIPs([]string{"192.168.1.1"})
+	})
+
+	if !strings.Contains(output, "192.168.1.1 server") {
+		t.Errorf("Output should contain 'server': %s", output)
+	}
+	if !strings.Contains(output, "192.168.1.1 web") {
+		t.Errorf("Output should contain 'web': %s", output)
+	}
+}
+
+func TestListByIPs_NoMatch(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		ListByIPs([]string{"192.168.1.1"})
+	})
+
+	// Should be empty for non-matching IP
+	if strings.TrimSpace(output) != "" {
+		t.Errorf("Expected empty output for non-matching IP, got: %s", output)
+	}
+}
+
+func TestListByHostnames_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 myserver\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		ListByHostnames([]string{"myserver"})
+	})
+
+	if !strings.Contains(output, "192.168.1.1") {
+		t.Errorf("Output should contain IP for myserver: %s", output)
+	}
+}
+
+func TestListByCIDRs_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server1\n192.168.1.2 server2\n10.0.0.1 other\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		ListByCIDRs([]string{"192.168.1.0/24"})
+	})
+
+	if !strings.Contains(output, "192.168.1.1") {
+		t.Error("Output should contain 192.168.1.1")
+	}
+	if !strings.Contains(output, "192.168.1.2") {
+		t.Error("Output should contain 192.168.1.2")
+	}
+	if strings.Contains(output, "10.0.0.1") {
+		t.Error("Output should NOT contain 10.0.0.1")
+	}
+}
+
+// --- Show Command Tests ---
+
+func TestShowHosts_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n# A comment\n192.168.1.1 server\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		ShowHosts()
+	})
+
+	if !strings.Contains(output, "localhost") {
+		t.Error("Output should contain localhost")
+	}
+	if !strings.Contains(output, "# A comment") {
+		t.Error("Output should preserve comments")
+	}
+	if !strings.Contains(output, "server") {
+		t.Error("Output should contain server")
+	}
+}
+
+// --- initEtcHosts and emptyFilePaths Tests ---
+
+func TestEmptyFilePaths(t *testing.T) {
+	// Save original values
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+	}()
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	if !emptyFilePaths() {
+		t.Error("emptyFilePaths should return true when both paths are empty")
+	}
+
+	HostsFileReadPath = "/some/path"
+	if emptyFilePaths() {
+		t.Error("emptyFilePaths should return false when read path is set")
+	}
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = "/some/path"
+	if emptyFilePaths() {
+		t.Error("emptyFilePaths should return false when write path is set")
+	}
+}
+
+func TestInitEtcHosts_WithPaths(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("127.0.0.1 localhost\n")
+	tmpFile.Close()
+
+	// Save original values
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = tmpFile.Name()
+	HostsFileWritePath = tmpFile.Name()
+
+	initEtcHosts()
+
+	if etcHosts == nil {
+		t.Error("etcHosts should be initialized")
+	}
+
+	result := etcHosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 1 || result[0] != "localhost" {
+		t.Errorf("etcHosts should contain localhost: %v", result)
 	}
 }
