@@ -73,11 +73,12 @@ Available Commands:
 
 
 Flags:
-  -d, --dryrun         dry run, output to stdout (ignores quiet)
-  -h, --help           help for txeh
-  -q, --quiet          no output
-  -r, --read string    (override) Path to read /etc/hosts file.
-  -w, --write string   (override) Path to write /etc/hosts file.
+  -d, --dryrun                   dry run, output to stdout (ignores quiet)
+  -h, --help                     help for txeh
+  -m, --max-hosts-per-line int   Max hostnames per line (0=auto, -1=unlimited, >0=explicit)
+  -q, --quiet                    no output
+  -r, --read string              (override) Path to read /etc/hosts file.
+  -w, --write string             (override) Path to write /etc/hosts file.
 ```
 
 
@@ -120,6 +121,91 @@ txeh add 127.1.27.100 dev3.example.com -r ./hosts.test -w ./hosts.test2
 
 ```
 
+## Comments
+
+txeh supports inline comments on host entries, useful for tracking which tool or purpose added specific entries (e.g., docker, development environments).
+
+### How Comments Work
+
+Comments use the standard hosts file format: `IP HOSTNAME [HOSTNAME...] # comment`
+
+**Key behavior:**
+- Comments are used for **grouping**: hosts with the same IP AND same comment are placed on the same line
+- Hosts added **without** a comment only match lines **without** a comment
+- Hosts added **with** a comment only match lines **with the same comment**
+- Comments are **never modified** on existing lines
+- If no matching line exists, a new line is created
+
+### CLI Usage
+
+```bash
+# Add host with a comment
+sudo txeh add 127.0.0.1 myapp --comment "local development"
+# Result: 127.0.0.1        myapp # local development
+
+# Add another host with the same comment (groups together)
+sudo txeh add 127.0.0.1 myapp2 --comment "local development"
+# Result: 127.0.0.1        myapp myapp2 # local development
+
+# Add host with a different comment (new line)
+sudo txeh add 127.0.0.1 api --comment "staging environment"
+# Result: 127.0.0.1        api # staging environment
+
+# Add host without a comment (only matches lines without comments)
+sudo txeh add 127.0.0.1 test
+# Result: goes to first 127.0.0.1 line that has NO comment, or creates new line
+```
+
+### Library Usage
+
+```go
+// Add hosts with a comment
+hosts.AddHostWithComment("127.0.0.1", "myapp", "local development")
+hosts.AddHostsWithComment("127.0.0.1", []string{"svc1", "svc2"}, "my project services")
+
+// Add hosts without a comment (original behavior)
+hosts.AddHost("127.0.0.1", "myhost")
+hosts.AddHosts("127.0.0.1", []string{"a", "b", "c"})
+```
+
+### Example Scenario
+
+Starting hosts file:
+```
+127.0.0.1        localhost
+127.0.0.1        app1 app2 # dev services
+```
+
+| Command | Result |
+|---------|--------|
+| `txeh add 127.0.0.1 app3 -c "dev services"` | app3 added to "dev services" line |
+| `txeh add 127.0.0.1 api -c "staging env"` | New line: `127.0.0.1 api # staging env` |
+| `txeh add 127.0.0.1 test` | test added to localhost line (no comment) |
+
+### Listing and Removing by Comment
+
+List all hosts with a specific comment:
+```bash
+sudo txeh list bycomment "dev services"
+```
+
+Remove all entries with a specific comment (removes entire lines):
+```bash
+sudo txeh remove bycomment "dev services"
+```
+
+### Modifying Comments
+
+Comments are never modified on existing lines. To change a comment, remove the hosts first and re-add them with the new comment:
+
+```bash
+# Remove all entries with the old comment
+sudo txeh remove bycomment "old comment"
+
+# Re-add with the new comment
+sudo txeh add 127.0.0.1 app1 app2 --comment "new comment"
+```
+
 ## txeh Go Library
 
 **Dependency:**
@@ -129,50 +215,66 @@ go get github.com/txn2/txeh
 
 **Example Golang Implementation**:
 ```go
-
 package main
 
 import (
     "fmt"
-    "strings"
 
     "github.com/txn2/txeh"
 )
 
 func main() {
+    // Load the system hosts file
     hosts, err := txeh.NewHostsDefault()
     if err != nil {
         panic(err)
     }
 
-    hosts.AddHost("127.100.100.100", "test")
-    hosts.AddHost("127.100.100.101", "logstash")
-    hosts.AddHosts("127.100.100.102", []string{"a", "b", "c"})
+    // Add hosts (without comments)
+    hosts.AddHost("127.100.100.100", "myapp")
+    hosts.AddHost("127.100.100.101", "database")
+    hosts.AddHosts("127.100.100.102", []string{"cache", "queue", "search"})
 
-    hosts.RemoveHosts([]string{"example", "example.machine", "example.machine.example.com"})
-    hosts.RemoveHosts(strings.Fields("example2 example.machine2 example.machine.example.com2"))
+    // Add hosts with comments (for tracking/organization)
+    hosts.AddHostWithComment("127.100.100.200", "api.local", "development services")
+    hosts.AddHostsWithComment("127.100.100.201", []string{"web.local", "admin.local"}, "frontend apps")
 
+    // Query existing entries
+    addresses := hosts.ListAddressesByHost("myapp", true)
+    fmt.Printf("myapp resolves to: %v\n", addresses)
 
+    hostnames := hosts.ListHostsByIP("127.100.100.102")
+    fmt.Printf("Hosts at 127.100.100.102: %v\n", hostnames)
+
+    // List all hosts with a specific comment
+    devHosts := hosts.ListHostsByComment("development services")
+    fmt.Printf("Dev service hosts: %v\n", devHosts)
+
+    // Remove entries
+    hosts.RemoveHost("database")
+    hosts.RemoveHosts([]string{"cache", "queue"})
     hosts.RemoveAddress("127.1.27.1")
+    hosts.RemoveAddresses([]string{"127.1.27.15", "127.1.27.14"})
 
-    removeList := []string{
-        "127.1.27.15",
-        "127.1.27.14",
-        "127.1.27.13",
+    // Remove all entries with specific comments
+    hosts.RemoveByComment("frontend apps")
+    hosts.RemoveByComments([]string{"old environment", "deprecated"})
+
+    // RemoveCIDRs returns an error (CIDR parsing can fail)
+    if err := hosts.RemoveCIDRs([]string{"10.0.0.0/8"}); err != nil {
+        panic(err)
     }
 
-    hosts.RemoveAddresses(removeList)
+    // Preview changes
+    fmt.Println(hosts.RenderHostsFile())
 
-    hfData := hosts.RenderHostsFile()
-
-    // if you like to see what the outcome will
-    // look like
-    fmt.Println(hfData)
-
-    hosts.Save()
-    // or hosts.SaveAs("./test.hosts")
+    // Save changes
+    err = hosts.Save()
+    if err != nil {
+        panic(err)
+    }
+    // Or save to a specific file: hosts.SaveAs("./custom.hosts")
 }
-
 ```
 
 ## Build Release
