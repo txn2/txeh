@@ -3,7 +3,7 @@
 
 # Etc Hosts Management Utility & Go Library
 
-[![GoDoc](https://godoc.org/github.com/txn2/irsync/txeh?status.svg)](https://godoc.org/github.com/txn2/txeh)
+[![Go Reference](https://pkg.go.dev/badge/github.com/txn2/txeh.svg)](https://pkg.go.dev/github.com/txn2/txeh)
 
 ### /etc/hosts Management
 
@@ -13,6 +13,13 @@ It is easy to open your [/etc/hosts] file in text editor and add or remove entri
 
 A computer's [/etc/hosts] file is a powerful utility for developers and system administrators to create localized, custom DNS entries. This small go library and utility were developed to encapsulate the complexity of working with [/etc/hosts] directly by providing a simple interface for adding and removing entries in a [/etc/hosts] file.
 
+**Features:**
+- Thread-safe operations (mutex-protected for concurrent use)
+- IPv4 and IPv6 support
+- CIDR range operations for bulk add/remove
+- Preserves comments and file formatting
+- Cross-platform (Linux, macOS, Windows)
+
 ## txeh Utility
 
 ### Install
@@ -21,7 +28,7 @@ MacOS [homebrew](https://brew.sh) users can `brew install txn2/tap/txeh`, otherw
 
 #### Install with go install
 
-When installing with Go please use the latest stable Go release. At least go1.16 or greater is required.
+When installing with Go please use the latest stable Go release. At least go1.24 or greater is required.
 
 To install use: `go install github.com/txn2/txeh/txeh@master`
 
@@ -46,7 +53,7 @@ The txeh CLI application allows command line or scripted access to /etc/hosts fi
 | |___  _____| |__
 | __\ \/ / _ \ '_ \
 | |_ >  <  __/ | | |
- \__/_/\_\___|_| |_| v1.5.0
+ \__/_/\_\___|_| |_|
 
 Add, remove and re-associate hostname entries in your /etc/hosts file.
 Read more including usage as a Go library at https://github.com/txn2/txeh
@@ -108,7 +115,7 @@ sudo txeh add 127.1.27.100 dev.example.com -q -d > hosts.test
 # default to the specified read path.
 txeh add 127.1.27.100 dev2.example.com -q -r ./hosts.test
 
-# specify a separate read and write oath
+# specify a separate read and write path
 txeh add 127.1.27.100 dev3.example.com -r ./hosts.test -w ./hosts.test2
 
 ```
