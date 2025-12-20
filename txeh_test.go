@@ -1,6 +1,7 @@
 package txeh
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -1113,5 +1114,1193 @@ func TestIsLocalhost(t *testing.T) {
 		if result != tc.expected {
 			t.Errorf("isLocalhost(%q) = %v, expected %v", tc.address, result, tc.expected)
 		}
+	}
+}
+
+// =============================================================================
+// MaxHostsPerLine Tests
+// Tests for the Windows hosts file line limit feature
+// =============================================================================
+
+func TestMaxHostsPerLine_ExplicitLimit(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 3,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 7 hosts to the same IP
+	for i := 0; i < 7; i++ {
+		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	}
+
+	// Should have 3 lines with 3, 3, and 1 hosts respectively
+	lines := hosts.GetHostFileLines()
+	addressLines := 0
+	totalHosts := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			addressLines++
+			totalHosts += len(line.Hostnames)
+			if len(line.Hostnames) > 3 {
+				t.Errorf("Line has %d hosts, expected <= 3", len(line.Hostnames))
+			}
+		}
+	}
+
+	if addressLines != 3 {
+		t.Errorf("Expected 3 address lines, got %d", addressLines)
+	}
+	if totalHosts != 7 {
+		t.Errorf("Expected 7 total hosts, got %d", totalHosts)
+	}
+}
+
+func TestMaxHostsPerLine_Unlimited(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: -1, // Force unlimited
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 20 hosts to the same IP
+	for i := 0; i < 20; i++ {
+		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	}
+
+	// Should have 1 line with all 20 hosts
+	lines := hosts.GetHostFileLines()
+	addressLines := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			addressLines++
+			if len(line.Hostnames) != 20 {
+				t.Errorf("Expected 20 hosts on line, got %d", len(line.Hostnames))
+			}
+		}
+	}
+
+	if addressLines != 1 {
+		t.Errorf("Expected 1 address line, got %d", addressLines)
+	}
+}
+
+func TestMaxHostsPerLine_AutoDetect_NonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("This test is for non-Windows platforms")
+	}
+
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 0, // Auto-detect
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 20 hosts to the same IP
+	for i := 0; i < 20; i++ {
+		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	}
+
+	// On non-Windows, should be unlimited (1 line with all hosts)
+	lines := hosts.GetHostFileLines()
+	addressLines := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			addressLines++
+		}
+	}
+
+	if addressLines != 1 {
+		t.Errorf("On non-Windows with auto-detect, expected 1 line, got %d", addressLines)
+	}
+}
+
+func TestMaxHostsPerLine_ExactlyAtLimit(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add exactly 5 hosts
+	for i := 0; i < 5; i++ {
+		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	}
+
+	// Should have exactly 1 line with 5 hosts
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line, got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 5 {
+		t.Errorf("Expected 5 hosts, got %d", len(lines[0].Hostnames))
+	}
+
+	// Add one more, should create new line
+	hosts.AddHost("127.0.0.1", "hostf")
+
+	lines = hosts.GetHostFileLines()
+	if len(lines) != 2 {
+		t.Errorf("After exceeding limit, expected 2 lines, got %d", len(lines))
+	}
+}
+
+func TestMaxHostsPerLine_MultipleIPs(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 3,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add hosts to multiple IPs
+	for i := 0; i < 5; i++ {
+		hosts.AddHost("127.0.0.1", "host1-"+string(rune('a'+i)))
+		hosts.AddHost("127.0.0.2", "host2-"+string(rune('a'+i)))
+	}
+
+	// Each IP should have 2 lines (3 + 2 hosts)
+	lines := hosts.GetHostFileLines()
+	ip1Lines := 0
+	ip2Lines := 0
+	for _, line := range lines {
+		switch line.Address {
+		case "127.0.0.1":
+			ip1Lines++
+		case "127.0.0.2":
+			ip2Lines++
+		}
+	}
+
+	if ip1Lines != 2 {
+		t.Errorf("Expected 2 lines for 127.0.0.1, got %d", ip1Lines)
+	}
+	if ip2Lines != 2 {
+		t.Errorf("Expected 2 lines for 127.0.0.2, got %d", ip2Lines)
+	}
+}
+
+func TestMaxHostsPerLine_HostLookupAcrossLines(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 5 hosts to same IP (will create 3 lines: 2, 2, 1)
+	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost("127.0.0.1", "hostb")
+	hosts.AddHost("127.0.0.1", "hostc")
+	hosts.AddHost("127.0.0.1", "hostd")
+	hosts.AddHost("127.0.0.1", "hoste")
+
+	// All hosts should be found when listing by IP
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 5 {
+		t.Errorf("Expected 5 hosts, got %d: %v", len(result), result)
+	}
+
+	// Each individual host should be findable
+	for _, hostname := range []string{"hosta", "hostb", "hostc", "hostd", "hoste"} {
+		found, addr, _ := hosts.HostAddressLookup(hostname, IPFamilyV4)
+		if !found {
+			t.Errorf("Host %s not found", hostname)
+		}
+		if addr != "127.0.0.1" {
+			t.Errorf("Host %s has wrong address: %s", hostname, addr)
+		}
+	}
+}
+
+func TestMaxHostsPerLine_ReassignHostAcrossLines(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add hosts to first IP
+	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost("127.0.0.1", "hostb")
+	hosts.AddHost("127.0.0.1", "hostc") // This goes to second line
+
+	// Verify hostc is at 127.0.0.1
+	found, addr, _ := hosts.HostAddressLookup("hostc", IPFamilyV4)
+	if !found || addr != "127.0.0.1" {
+		t.Fatalf("hostc should be at 127.0.0.1, got: found=%v addr=%s", found, addr)
+	}
+
+	// Reassign hostc to different IP
+	hosts.AddHost("192.168.1.1", "hostc")
+
+	// Verify hostc is now at 192.168.1.1
+	found, addr, _ = hosts.HostAddressLookup("hostc", IPFamilyV4)
+	if !found || addr != "192.168.1.1" {
+		t.Errorf("hostc should be at 192.168.1.1, got: found=%v addr=%s", found, addr)
+	}
+
+	// Verify 127.0.0.1 no longer has hostc
+	result := hosts.ListHostsByIP("127.0.0.1")
+	for _, h := range result {
+		if h == "hostc" {
+			t.Error("hostc should have been removed from 127.0.0.1")
+		}
+	}
+}
+
+func TestMaxHostsPerLine_AddExistingHostSameIP(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add hosts to create multiple lines
+	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost("127.0.0.1", "hostb")
+	hosts.AddHost("127.0.0.1", "hostc") // Goes to second line
+
+	// Try to add hosta again to same IP - should be no-op
+	hosts.AddHost("127.0.0.1", "hosta")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 3 {
+		t.Errorf("Adding existing host should be no-op, got %d hosts: %v", len(result), result)
+	}
+
+	// Count hosta occurrences
+	count := 0
+	for _, h := range result {
+		if h == "hosta" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("hosta should appear exactly once, got %d times", count)
+	}
+}
+
+func TestMaxHostsPerLine_PreservesExistingLongLines(t *testing.T) {
+	// Start with a hosts file that already has more than the limit
+	input := "127.0.0.1 host1 host2 host3 host4 host5 host6 host7 host8 host9 host10\n"
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 3,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Verify existing long line is preserved
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Existing line should be preserved as-is, got %d lines", len(lines))
+	}
+	if len(lines[0].Hostnames) != 10 {
+		t.Errorf("Existing hosts should be preserved, got %d hosts", len(lines[0].Hostnames))
+	}
+
+	// Adding a new host to this IP should create a new line
+	hosts.AddHost("127.0.0.1", "newhost")
+
+	lines = hosts.GetHostFileLines()
+	// Original long line still exists, plus new line for newhost
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines after adding host, got %d", len(lines))
+	}
+
+	// Find the new line
+	newHostFound := false
+	for _, line := range lines {
+		for _, h := range line.Hostnames {
+			if h == "newhost" {
+				newHostFound = true
+				if len(line.Hostnames) != 1 {
+					t.Errorf("New host should be on its own line, got %d hosts", len(line.Hostnames))
+				}
+			}
+		}
+	}
+	if !newHostFound {
+		t.Error("newhost not found after adding")
+	}
+}
+
+func TestMaxHostsPerLine_LimitOfOne(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 1,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 3 hosts
+	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost("127.0.0.1", "hostb")
+	hosts.AddHost("127.0.0.1", "hostc")
+
+	// Should have 3 separate lines
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 3 {
+		t.Errorf("With limit of 1, expected 3 lines, got %d", len(lines))
+	}
+
+	for _, line := range lines {
+		if len(line.Hostnames) != 1 {
+			t.Errorf("Each line should have exactly 1 host, got %d", len(line.Hostnames))
+		}
+	}
+}
+
+func TestMaxHostsPerLine_IPv6(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add hosts to IPv6 address
+	hosts.AddHost("::1", "ipv6host1")
+	hosts.AddHost("::1", "ipv6host2")
+	hosts.AddHost("::1", "ipv6host3")
+
+	// Should have 2 lines for ::1
+	lines := hosts.GetHostFileLines()
+	ipv6Lines := 0
+	totalHosts := 0
+	for _, line := range lines {
+		if line.Address == "::1" {
+			ipv6Lines++
+			totalHosts += len(line.Hostnames)
+		}
+	}
+
+	if ipv6Lines != 2 {
+		t.Errorf("Expected 2 lines for ::1, got %d", ipv6Lines)
+	}
+	if totalHosts != 3 {
+		t.Errorf("Expected 3 total hosts for ::1, got %d", totalHosts)
+	}
+}
+
+func TestMaxHostsPerLine_RenderHostsFile(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 3,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 5 hosts
+	hosts.AddHost("127.0.0.1", "host1")
+	hosts.AddHost("127.0.0.1", "host2")
+	hosts.AddHost("127.0.0.1", "host3")
+	hosts.AddHost("127.0.0.1", "host4")
+	hosts.AddHost("127.0.0.1", "host5")
+
+	rendered := hosts.RenderHostsFile()
+	lines := strings.Split(strings.TrimSpace(rendered), "\n")
+
+	if len(lines) != 2 {
+		t.Errorf("Rendered output should have 2 lines, got %d: %v", len(lines), lines)
+	}
+
+	// Each line should have the IP and hosts
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "127.0.0.1") {
+			t.Errorf("Line should start with IP: %s", line)
+		}
+	}
+}
+
+func TestMaxHostsPerLine_ThreadSafety(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 3,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	iterations := 50
+
+	// Multiple goroutines adding hosts
+	for g := 0; g < 5; g++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				hostname := "host" + string(rune('a'+goroutineID)) + string(rune('0'+i%10))
+				hosts.AddHost("127.0.0.1", hostname)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify no panics or data races (run with -race)
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) == 0 {
+		t.Error("Should have added some hosts")
+	}
+
+	// Verify no line exceeds the limit
+	lines := hosts.GetHostFileLines()
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" && len(line.Hostnames) > 3 {
+			t.Errorf("Line exceeds limit of 3: %d hosts", len(line.Hostnames))
+		}
+	}
+}
+
+func TestMaxHostsPerLine_DefaultConstant(t *testing.T) {
+	if DefaultMaxHostsPerLineWindows != 9 {
+		t.Errorf("DefaultMaxHostsPerLineWindows should be 9, got %d", DefaultMaxHostsPerLineWindows)
+	}
+}
+
+func TestGetEffectiveMaxHostsPerLine_NilConfig(t *testing.T) {
+	// Create hosts without embedding config
+	h := &Hosts{}
+
+	result := h.getEffectiveMaxHostsPerLine()
+
+	if runtime.GOOS == "windows" {
+		if result != DefaultMaxHostsPerLineWindows {
+			t.Errorf("On Windows with nil config, expected %d, got %d", DefaultMaxHostsPerLineWindows, result)
+		}
+	} else {
+		if result != 0 {
+			t.Errorf("On non-Windows with nil config, expected 0 (unlimited), got %d", result)
+		}
+	}
+}
+
+func TestMaxHostsPerLine_RemoveHostFromMultiLineIP(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 4 hosts (creates 2 lines with 2 hosts each)
+	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost("127.0.0.1", "hostb")
+	hosts.AddHost("127.0.0.1", "hostc")
+	hosts.AddHost("127.0.0.1", "hostd")
+
+	// Verify we have 4 hosts
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 4 {
+		t.Fatalf("Expected 4 hosts, got %d", len(result))
+	}
+
+	// Remove hostc
+	hosts.RemoveHost("hostc")
+
+	// Verify only 3 hosts remain
+	result = hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 3 {
+		t.Errorf("After removal, expected 3 hosts, got %d: %v", len(result), result)
+	}
+
+	for _, h := range result {
+		if h == "hostc" {
+			t.Error("hostc should have been removed")
+		}
+	}
+}
+
+func TestMaxHostsPerLine_KubefwdScenario(t *testing.T) {
+	// Simulates kubefwd adding many services to localhost
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 9, // Windows limit
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 25 services (like kubefwd would)
+	services := []string{
+		"api-gateway", "auth-service", "user-service", "order-service",
+		"payment-service", "notification-service", "email-service", "sms-service",
+		"logging-service", "monitoring-service", "cache-service", "queue-service",
+		"worker-service", "scheduler-service", "config-service", "discovery-service",
+		"gateway-admin", "metrics-service", "tracing-service", "health-service",
+		"backup-service", "restore-service", "migration-service", "seed-service",
+		"cleanup-service",
+	}
+
+	for _, svc := range services {
+		hosts.AddHost("127.0.0.1", svc)
+		hosts.AddHost("127.0.0.1", svc+".default")
+		hosts.AddHost("127.0.0.1", svc+".default.svc")
+		hosts.AddHost("127.0.0.1", svc+".default.svc.cluster.local")
+	}
+
+	// Total hosts: 25 * 4 = 100
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 100 {
+		t.Errorf("Expected 100 hosts, got %d", len(result))
+	}
+
+	// Verify no line exceeds 9 hosts
+	lines := hosts.GetHostFileLines()
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" && len(line.Hostnames) > 9 {
+			t.Errorf("Line has %d hosts, exceeds Windows limit of 9", len(line.Hostnames))
+		}
+	}
+
+	// Should have ceiling(100/9) = 12 lines
+	ip127Lines := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			ip127Lines++
+		}
+	}
+	expectedLines := (100 + 8) / 9 // ceiling division
+	if ip127Lines != expectedLines {
+		t.Errorf("Expected %d lines for 100 hosts with limit 9, got %d", expectedLines, ip127Lines)
+	}
+}
+
+// =============================================================================
+// AddHostWithComment Tests
+// Tests for the inline comment feature (Issue #30)
+// =============================================================================
+
+func TestAddHostWithComment_Basic(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostWithComment("127.0.0.1", "myhost", "added-by-ORG")
+
+	rendered := hosts.RenderHostsFile()
+	if !strings.Contains(rendered, "myhost") {
+		t.Error("Host not found in rendered output")
+	}
+	if !strings.Contains(rendered, "added-by-ORG") {
+		t.Error("Comment not found in rendered output")
+	}
+	if !strings.Contains(rendered, "#") {
+		t.Error("Comment marker (#) not found in rendered output")
+	}
+}
+
+func TestAddHostWithComment_EmptyComment(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Empty comment should work like AddHost
+	hosts.AddHostWithComment("127.0.0.1", "host1", "")
+	hosts.AddHost("127.0.0.1", "host2")
+
+	// Both should be on the same line (same address, same empty comment)
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line (same address, no comment), got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 2 {
+		t.Errorf("Expected 2 hosts on line, got %d", len(lines[0].Hostnames))
+	}
+}
+
+func TestAddHostWithComment_SameCommentAppends(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostWithComment("127.0.0.1", "host1", "my-app")
+	hosts.AddHostWithComment("127.0.0.1", "host2", "my-app")
+	hosts.AddHostWithComment("127.0.0.1", "host3", "my-app")
+
+	// All should be on the same line
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line (same comment), got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 3 {
+		t.Errorf("Expected 3 hosts on line, got %d", len(lines[0].Hostnames))
+	}
+	if lines[0].Comment != "my-app" {
+		t.Errorf("Expected comment 'my-app', got '%s'", lines[0].Comment)
+	}
+}
+
+func TestAddHostWithComment_DifferentCommentCreatesNewLine(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostWithComment("127.0.0.1", "host1", "app-a")
+	hosts.AddHostWithComment("127.0.0.1", "host2", "app-b")
+
+	// Should be on different lines due to different comments
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines (different comments), got %d", len(lines))
+	}
+
+	// Verify each line has correct comment
+	comments := make(map[string]bool)
+	for _, line := range lines {
+		comments[line.Comment] = true
+	}
+	if !comments["app-a"] || !comments["app-b"] {
+		t.Error("Expected both 'app-a' and 'app-b' comments")
+	}
+}
+
+func TestAddHostWithComment_MixedWithAddHost(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHost("127.0.0.1", "host1")                      // no comment
+	hosts.AddHostWithComment("127.0.0.1", "host2", "my-app") // with comment
+	hosts.AddHost("127.0.0.1", "host3")                      // no comment - should join host1
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines, got %d", len(lines))
+	}
+
+	// Find line without comment - should have host1 and host3
+	for _, line := range lines {
+		if line.Comment == "" {
+			if len(line.Hostnames) != 2 {
+				t.Errorf("Line without comment should have 2 hosts, got %d", len(line.Hostnames))
+			}
+		}
+		if line.Comment == "my-app" {
+			if len(line.Hostnames) != 1 {
+				t.Errorf("Line with comment should have 1 host, got %d", len(line.Hostnames))
+			}
+		}
+	}
+}
+
+func TestAddHostsWithComment_Basic(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostsWithComment("127.0.0.1", []string{"host1", "host2", "host3"}, "bulk-add")
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line, got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 3 {
+		t.Errorf("Expected 3 hosts, got %d", len(lines[0].Hostnames))
+	}
+	if lines[0].Comment != "bulk-add" {
+		t.Errorf("Expected comment 'bulk-add', got '%s'", lines[0].Comment)
+	}
+}
+
+func TestAddHostWithComment_RespectsMaxHostsPerLine(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 2,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add 5 hosts with same comment
+	for i := 0; i < 5; i++ {
+		hosts.AddHostWithComment("127.0.0.1", "host"+string(rune('a'+i)), "my-app")
+	}
+
+	// Should have 3 lines (2, 2, 1)
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 3 {
+		t.Errorf("Expected 3 lines, got %d", len(lines))
+	}
+
+	// All lines should have the same comment
+	for _, line := range lines {
+		if line.Comment != "my-app" {
+			t.Errorf("Expected comment 'my-app', got '%s'", line.Comment)
+		}
+	}
+
+	// Verify no line exceeds limit
+	for _, line := range lines {
+		if len(line.Hostnames) > 2 {
+			t.Errorf("Line exceeds limit: %d hosts", len(line.Hostnames))
+		}
+	}
+}
+
+func TestAddHostWithComment_PreservesExistingComments(t *testing.T) {
+	input := "127.0.0.1 existinghost # existing-comment\n"
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add to same address with same comment
+	hosts.AddHostWithComment("127.0.0.1", "newhost", "existing-comment")
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line, got %d", len(lines))
+	}
+	if len(lines[0].Hostnames) != 2 {
+		t.Errorf("Expected 2 hosts, got %d", len(lines[0].Hostnames))
+	}
+
+	// Add with different comment
+	hosts.AddHostWithComment("127.0.0.1", "anotherhost", "new-comment")
+
+	lines = hosts.GetHostFileLines()
+	if len(lines) != 2 {
+		t.Errorf("Expected 2 lines after adding different comment, got %d", len(lines))
+	}
+}
+
+func TestAddHostWithComment_Rendered(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostWithComment("127.0.0.1", "myservice", "managed-by-kubefwd")
+
+	rendered := hosts.RenderHostsFile()
+
+	// Should contain the comment with # prefix
+	expected := "127.0.0.1"
+	if !strings.Contains(rendered, expected) {
+		t.Errorf("Rendered output should contain '%s'", expected)
+	}
+	if !strings.Contains(rendered, "myservice") {
+		t.Error("Rendered output should contain 'myservice'")
+	}
+	if !strings.Contains(rendered, "#managed-by-kubefwd") && !strings.Contains(rendered, "# managed-by-kubefwd") {
+		t.Errorf("Rendered output should contain comment. Got: %s", rendered)
+	}
+}
+
+func TestAddHostWithComment_WhitespaceHandling(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Comments with leading/trailing whitespace should be normalized
+	hosts.AddHostWithComment("127.0.0.1", "host1", "  my-comment  ")
+	hosts.AddHostWithComment("127.0.0.1", "host2", "my-comment")
+
+	// Both should be on the same line (whitespace normalized)
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line (whitespace normalized), got %d", len(lines))
+	}
+}
+
+func TestAddHostWithComment_IPv6(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	hosts.AddHostWithComment("::1", "ipv6host", "ipv6-comment")
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 1 {
+		t.Errorf("Expected 1 line, got %d", len(lines))
+	}
+	if lines[0].Comment != "ipv6-comment" {
+		t.Errorf("Expected comment 'ipv6-comment', got '%s'", lines[0].Comment)
+	}
+}
+
+func TestAddHostWithComment_InvalidIP(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Should be ignored like AddHost
+	hosts.AddHostWithComment("not-an-ip", "host", "comment")
+
+	lines := hosts.GetHostFileLines()
+	if len(lines) != 0 {
+		t.Errorf("Invalid IP should be ignored, got %d lines", len(lines))
+	}
+}
+
+func TestAddHostWithComment_KubefwdScenario(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 9,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Simulate kubefwd adding services with a tracking comment
+	services := []string{
+		"api-gateway", "auth-service", "user-service",
+		"api-gateway.default", "auth-service.default", "user-service.default",
+	}
+
+	hosts.AddHostsWithComment("127.0.0.1", services, "kubefwd-managed")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 6 {
+		t.Errorf("Expected 6 hosts, got %d", len(result))
+	}
+
+	// All lines should have the kubefwd comment
+	lines := hosts.GetHostFileLines()
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" && line.Comment != "kubefwd-managed" {
+			t.Errorf("Expected 'kubefwd-managed' comment, got '%s'", line.Comment)
+		}
+	}
+
+	// Rendered output should show the comment
+	rendered := hosts.RenderHostsFile()
+	if !strings.Contains(rendered, "kubefwd-managed") {
+		t.Error("Rendered output should contain 'kubefwd-managed'")
+	}
+}
+
+func TestAddHostWithComment_ThreadSafety(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	iterations := 50
+
+	// Multiple goroutines adding hosts with comments
+	for g := 0; g < 5; g++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+			comment := "goroutine-" + string(rune('0'+goroutineID))
+			for i := 0; i < iterations; i++ {
+				hostname := "host" + string(rune('a'+goroutineID)) + string(rune('0'+i%10))
+				hosts.AddHostWithComment("127.0.0.1", hostname, comment)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify no panics or data races (run with -race)
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) == 0 {
+		t.Error("Should have added some hosts")
+	}
+}
+
+func TestAddHostWithComment_ReassignmentPreservesComment(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{RawText: &input})
+	if err != nil {
+		t.Fatalf("Failed to create hosts: %v", err)
+	}
+
+	// Add host with comment
+	hosts.AddHostWithComment("127.0.0.1", "myhost", "original-comment")
+
+	// Reassign to different IP with different comment
+	hosts.AddHostWithComment("192.168.1.1", "myhost", "new-comment")
+
+	// Host should be at new IP
+	found, addr, _ := hosts.HostAddressLookup("myhost", IPFamilyV4)
+	if !found || addr != "192.168.1.1" {
+		t.Errorf("Host should be at 192.168.1.1, got %s", addr)
+	}
+
+	// Old IP should have no hosts
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 0 {
+		t.Errorf("Old IP should have no hosts, got %d", len(result))
+	}
+}
+
+// TestListHostsByComment tests listing hosts by their comment
+func TestListHostsByComment(t *testing.T) {
+	hostsData := `127.0.0.1        localhost
+127.0.0.1        app1 app2 # dev services
+127.0.0.1        api1 api2 # dev services
+192.168.1.1      staging # staging env
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// List hosts with "dev services" comment
+	result := hosts.ListHostsByComment("dev services")
+	if len(result) != 4 {
+		t.Errorf("Expected 4 hosts with 'dev services' comment, got %d", len(result))
+	}
+
+	// List hosts with "staging env" comment
+	result = hosts.ListHostsByComment("staging env")
+	if len(result) != 1 {
+		t.Errorf("Expected 1 host with 'staging env' comment, got %d", len(result))
+	}
+	if result[0] != "staging" {
+		t.Errorf("Expected 'staging', got %s", result[0])
+	}
+
+	// List hosts with non-existent comment
+	result = hosts.ListHostsByComment("does not exist")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts, got %d", len(result))
+	}
+
+	// List hosts with empty comment (should return localhost)
+	result = hosts.ListHostsByComment("")
+	if len(result) != 1 {
+		t.Errorf("Expected 1 host with no comment, got %d", len(result))
+	}
+}
+
+// TestRemoveByComment tests removing all entries by comment
+func TestRemoveByComment(t *testing.T) {
+	hostsData := `127.0.0.1        localhost
+127.0.0.1        app1 app2 # dev services
+127.0.0.1        api1 api2 # dev services
+192.168.1.1      staging # staging env
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove all entries with "dev services" comment
+	hosts.RemoveByComment("dev services")
+
+	// Verify they're gone
+	result := hosts.ListHostsByComment("dev services")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts after removal, got %d", len(result))
+	}
+
+	// Verify localhost is still there
+	result = hosts.ListHostsByComment("")
+	if len(result) != 1 {
+		t.Errorf("Expected localhost to remain, got %d hosts", len(result))
+	}
+
+	// Verify staging is still there
+	result = hosts.ListHostsByComment("staging env")
+	if len(result) != 1 {
+		t.Errorf("Expected staging to remain, got %d hosts", len(result))
+	}
+}
+
+// TestRemoveByCommentEmpty tests removing entries with no comment
+func TestRemoveByCommentEmpty(t *testing.T) {
+	hostsData := `127.0.0.1        localhost
+127.0.0.1        app1 # dev services
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove all entries with no comment
+	hosts.RemoveByComment("")
+
+	// Verify localhost is gone
+	result := hosts.ListHostsByComment("")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts with empty comment, got %d", len(result))
+	}
+
+	// Verify app1 is still there
+	result = hosts.ListHostsByComment("dev services")
+	if len(result) != 1 {
+		t.Errorf("Expected app1 to remain, got %d hosts", len(result))
+	}
+}
+
+// TestListHostsByComment_WhitespaceHandling tests that whitespace in comments is handled correctly
+func TestListHostsByComment_WhitespaceHandling(t *testing.T) {
+	hostsData := `127.0.0.1        app1 # dev services
+127.0.0.1        app2 #   dev services
+127.0.0.1        app3 # dev services
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// All should match "dev services" after trimming
+	result := hosts.ListHostsByComment("dev services")
+	if len(result) != 3 {
+		t.Errorf("Expected 3 hosts (whitespace should be trimmed), got %d", len(result))
+	}
+
+	// Query with whitespace should also work
+	result = hosts.ListHostsByComment("  dev services  ")
+	if len(result) != 3 {
+		t.Errorf("Expected 3 hosts (query whitespace should be trimmed), got %d", len(result))
+	}
+}
+
+// TestMaxHostsPerLine_Windows9Limit tests the actual Windows 9 host limit scenario
+func TestMaxHostsPerLine_Windows9Limit(t *testing.T) {
+	input := ""
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:         &input,
+		MaxHostsPerLine: 9, // Windows limit
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add 20 hosts to same IP (should create 3 lines: 9+9+2)
+	for i := 1; i <= 20; i++ {
+		hosts.AddHost("127.0.0.1", fmt.Sprintf("svc%d", i))
+	}
+
+	// Count the lines with this address
+	lines := hosts.GetHostFileLines()
+	addressLines := 0
+	for _, line := range lines {
+		if line.Address == "127.0.0.1" {
+			addressLines++
+			// Each line should have at most 9 hosts
+			if len(line.Hostnames) > 9 {
+				t.Errorf("Line has %d hosts, expected max 9", len(line.Hostnames))
+			}
+		}
+	}
+
+	// Should have 3 lines (9+9+2=20)
+	if addressLines != 3 {
+		t.Errorf("Expected 3 lines for 20 hosts with limit of 9, got %d", addressLines)
+	}
+
+	// Verify all hosts are there
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 20 {
+		t.Errorf("Expected 20 hosts, got %d", len(result))
+	}
+}
+
+// TestRemoveByComment_WhitespaceHandling tests whitespace handling in RemoveByComment
+func TestRemoveByComment_WhitespaceHandling(t *testing.T) {
+	hostsData := `127.0.0.1        app1 #   spaced comment
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove with untrimmed query should still work
+	hosts.RemoveByComment("  spaced comment  ")
+
+	result := hosts.ListHostsByIP("127.0.0.1")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts after removal, got %d", len(result))
+	}
+}
+
+// TestRemoveByComments tests removing entries by multiple comments
+func TestRemoveByComments(t *testing.T) {
+	hostsData := `127.0.0.1        localhost
+127.0.0.1        app1 # dev services
+127.0.0.1        app2 # staging env
+127.0.0.1        app3 # production
+`
+	hosts, err := NewHosts(&HostsConfig{RawText: &hostsData})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove multiple comments at once
+	hosts.RemoveByComments([]string{"dev services", "staging env"})
+
+	// Verify dev services and staging env are gone
+	result := hosts.ListHostsByComment("dev services")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts with 'dev services', got %d", len(result))
+	}
+	result = hosts.ListHostsByComment("staging env")
+	if len(result) != 0 {
+		t.Errorf("Expected 0 hosts with 'staging env', got %d", len(result))
+	}
+
+	// Verify localhost and production are still there
+	result = hosts.ListHostsByComment("")
+	if len(result) != 1 {
+		t.Errorf("Expected localhost to remain, got %d hosts", len(result))
+	}
+	result = hosts.ListHostsByComment("production")
+	if len(result) != 1 {
+		t.Errorf("Expected production to remain, got %d hosts", len(result))
 	}
 }
