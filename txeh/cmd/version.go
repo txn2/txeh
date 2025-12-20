@@ -23,7 +23,7 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-// Version returns the version of txeh binary
+// VersionFromBuild Version returns the version of txeh binary
 func VersionFromBuild() (version string) {
 	// Version is managed with goreleaser
 	if Version != "0.0.0" {
