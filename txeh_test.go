@@ -114,6 +114,9 @@ func TestNewHosts(t *testing.T) {
 	fromRenderedHosts, err := NewHosts(&HostsConfig{
 		RawText: &renderedData,
 	})
+	if err != nil {
+		t.Fatalf("Failed to create hosts from rendered data: %v", err)
+	}
 
 	for _, k := range []string{"A", "T", "T", "X", "X", "E", "E", "H", "H"} {
 		fromRenderedHosts.AddHost("127.100.100.100", k)
@@ -291,7 +294,9 @@ func TestMethods(t *testing.T) {
 	}
 
 	// remove addresses in 127.1.27.0/16 range
-	mockHosts.RemoveCIDRs([]string{"127.1.27.0/16"})
+	if err := mockHosts.RemoveCIDRs([]string{"127.1.27.0/16"}); err != nil {
+		t.Fatalf("RemoveCIDRs failed: %v", err)
+	}
 
 	hfl := strings.Split(mockHosts.RenderHostsFile(), "\n")
 	lines := 19
@@ -595,6 +600,7 @@ func TestReload_WithRawText_ReturnsError(t *testing.T) {
 	err = hosts.Reload()
 	if err == nil {
 		t.Error("Reload with RawText should return error")
+		return
 	}
 	if err.Error() != "cannot call Reload with RawText" {
 		t.Errorf("Unexpected error message: %v", err)
@@ -607,14 +613,14 @@ func TestReload_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write initial content
 	initialContent := "127.0.0.1 localhost\n"
 	if _, err := tmpFile.WriteString(initialContent); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Load the hosts file
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
@@ -657,8 +663,8 @@ func TestReload_FileNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	tmpFile.WriteString("127.0.0.1 localhost\n")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
 	if err != nil {
@@ -666,7 +672,7 @@ func TestReload_FileNotFound(t *testing.T) {
 	}
 
 	// Delete the file
-	os.Remove(tmpFile.Name())
+	_ = os.Remove(tmpFile.Name())
 
 	// Reload should fail
 	err = hosts.Reload()
@@ -697,9 +703,9 @@ func TestSaveAs_RealFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("127.0.0.1 localhost\n")
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
 	if err != nil {
@@ -714,8 +720,8 @@ func TestSaveAs_RealFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create output file: %v", err)
 	}
-	defer os.Remove(outputFile.Name())
-	outputFile.Close()
+	defer func() { _ = os.Remove(outputFile.Name()) }()
+	_ = outputFile.Close()
 
 	if err := hosts.SaveAs(outputFile.Name()); err != nil {
 		t.Fatalf("SaveAs failed: %v", err)
@@ -737,9 +743,9 @@ func TestSaveAs_InvalidPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("127.0.0.1 localhost\n")
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
 	if err != nil {
@@ -910,11 +916,11 @@ func TestParseHosts_ValidFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content := "127.0.0.1 localhost\n192.168.1.1 server\n"
-	tmpFile.WriteString(content)
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString(content)
+	_ = tmpFile.Close()
 
 	lines, err := ParseHosts(tmpFile.Name())
 	if err != nil {
@@ -933,10 +939,10 @@ func TestNewHosts_WithReadPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
-	tmpFile.WriteString("127.0.0.1 localhost\n")
-	tmpFile.Close()
+	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
 	if err != nil {
@@ -955,17 +961,17 @@ func TestNewHosts_WithReadAndWritePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create read file: %v", err)
 	}
-	defer os.Remove(readFile.Name())
-	readFile.WriteString("127.0.0.1 localhost\n")
-	readFile.Close()
+	defer func() { _ = os.Remove(readFile.Name()) }()
+	_, _ = readFile.WriteString("127.0.0.1 localhost\n")
+	_ = readFile.Close()
 
 	// Create write file
 	writeFile, err := os.CreateTemp("", "hosts_write_*")
 	if err != nil {
 		t.Fatalf("Failed to create write file: %v", err)
 	}
-	defer os.Remove(writeFile.Name())
-	writeFile.Close()
+	defer func() { _ = os.Remove(writeFile.Name()) }()
+	_ = writeFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{
 		ReadFilePath:  readFile.Name(),

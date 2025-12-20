@@ -324,11 +324,11 @@ func setupTestHosts(t *testing.T, content string) (string, func()) {
 	}
 
 	if _, err := tmpFile.WriteString(content); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Set up the global state
 	HostsFileReadPath = tmpFile.Name()
@@ -342,13 +342,13 @@ func setupTestHosts(t *testing.T, content string) (string, func()) {
 		WriteFilePath: tmpFile.Name(),
 	})
 	if err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		t.Fatalf("Failed to initialize hosts: %v", err)
 	}
 	etcHosts = hosts
 
 	cleanup := func() {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		HostsFileReadPath = ""
 		HostsFileWritePath = ""
 		DryRun = false
@@ -361,16 +361,19 @@ func setupTestHosts(t *testing.T, content string) (string, func()) {
 // Helper to capture stdout
 func captureOutput(f func()) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
 	os.Stdout = w
 
 	f()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	return buf.String()
 }
 
@@ -674,9 +677,9 @@ func TestInitEtcHosts_WithPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("127.0.0.1 localhost\n")
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_ = tmpFile.Close()
 
 	// Save original values
 	origRead := HostsFileReadPath
