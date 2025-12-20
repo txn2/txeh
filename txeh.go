@@ -19,6 +19,10 @@ const (
 	ADDRESS = 30
 )
 
+// DefaultMaxHostsPerLineWindows is the default maximum number of hostnames per line on Windows.
+// Windows has a limitation where lines with more than ~9 hostnames may not resolve correctly.
+const DefaultMaxHostsPerLineWindows = 9
+
 type IPFamily int64
 
 const (
@@ -32,6 +36,13 @@ type HostsConfig struct {
 	// RawText for input. If RawText is set ReadFilePath, WriteFilePath are ignored. Use RenderHostsFile rather
 	// than save to get the results.
 	RawText *string
+	// MaxHostsPerLine limits the number of hostnames per line when adding hosts.
+	// This is useful for Windows which has a limitation of ~9 hostnames per line.
+	// Values:
+	//   0  = auto-detect (Windows: 9, others: unlimited)
+	//  -1  = force unlimited (no limit)
+	//  >0  = explicit limit
+	MaxHostsPerLine int
 }
 
 type Hosts struct {
@@ -250,6 +261,32 @@ func (h *Hosts) RemoveFirstHost(host string) bool {
 	return false
 }
 
+// RemoveByComments removes all host entries that have any of the specified comments.
+// This removes entire lines where the comment matches.
+func (h *Hosts) RemoveByComments(comments []string) {
+	for _, comment := range comments {
+		h.RemoveByComment(comment)
+	}
+}
+
+// RemoveByComment removes all host entries that have the specified comment.
+// This removes entire lines where the comment matches.
+func (h *Hosts) RemoveByComment(comment string) {
+	h.Lock()
+	defer h.Unlock()
+
+	comment = strings.TrimSpace(comment)
+	var newLines HostFileLines
+
+	for _, hfl := range h.hostFileLines {
+		if hfl.Comment != comment {
+			newLines = append(newLines, hfl)
+		}
+	}
+
+	h.hostFileLines = newLines
+}
+
 // AddHosts adds an array of hosts to the first matching address it finds
 // or creates the address and adds the hosts
 func (h *Hosts) AddHosts(address string, hosts []string) {
@@ -258,11 +295,40 @@ func (h *Hosts) AddHosts(address string, hosts []string) {
 	}
 }
 
+// AddHostsWithComment adds an array of hosts to an address with a comment.
+// All hosts will share the same comment. If the address already exists with
+// the same comment, hosts are appended to that line (respecting MaxHostsPerLine).
+// If the address exists with a different comment, a new line is created.
+func (h *Hosts) AddHostsWithComment(address string, hosts []string, comment string) {
+	for _, hst := range hosts {
+		h.AddHostWithComment(address, hst, comment)
+	}
+}
+
 // AddHost adds a host to an address and removes the host
 // from any existing address is may be associated with
 func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
+	h.addHostWithComment(addressRaw, hostRaw, "")
+}
+
+// AddHostWithComment adds a host to an address with an inline comment.
+// The comment will appear after the hostnames on the line (e.g., "127.0.0.1 host # comment").
+// If the address already exists with the same comment, the host is appended to that line
+// (respecting MaxHostsPerLine). If the address exists with a different comment, a new line
+// is created with the specified comment.
+func (h *Hosts) AddHostWithComment(addressRaw string, hostRaw string, comment string) {
+	h.addHostWithComment(addressRaw, hostRaw, comment)
+}
+
+// addHostWithComment is the internal implementation that handles both
+// commented and non-commented host additions.
+func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment string) {
 	host := strings.TrimSpace(strings.ToLower(hostRaw))
 	address := strings.TrimSpace(strings.ToLower(addressRaw))
+	// Normalize comment: trim spaces, but don't add/remove the # prefix
+	// (the # is handled during rendering)
+	comment = strings.TrimSpace(comment)
+
 	addressIP := net.ParseIP(address)
 	if addressIP == nil {
 		return
@@ -301,19 +367,27 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 		}
 	}
 
-	// if the address exists add it to the address line
+	// Get the effective max hosts per line limit
+	maxPerLine := h.getEffectiveMaxHostsPerLine()
+
+	// if the address exists with matching comment, add it to that line if there's room
 	for i, hfl := range h.hostFileLines {
-		if hfl.Address == address {
-			h.hostFileLines[i].Hostnames = append(h.hostFileLines[i].Hostnames, host)
-			return
+		if hfl.Address == address && hfl.Comment == comment {
+			// Check if this line has room (0 means unlimited)
+			if maxPerLine <= 0 || len(h.hostFileLines[i].Hostnames) < maxPerLine {
+				h.hostFileLines[i].Hostnames = append(h.hostFileLines[i].Hostnames, host)
+				return
+			}
+			// This line is full, continue looking for another line with the same address and comment
 		}
 	}
 
-	// the address and host do not already exist so go ahead and create them
+	// No existing line with matching address and comment found (or all are full), create a new line
 	hfl := HostFileLine{
 		LineType:  ADDRESS,
 		Address:   address,
 		Hostnames: []string{host},
+		Comment:   comment,
 	}
 
 	h.hostFileLines = append(h.hostFileLines, hfl)
@@ -379,6 +453,23 @@ func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
 	return ipHosts
 }
 
+// ListHostsByComment returns all hostnames on lines with the given comment
+func (h *Hosts) ListHostsByComment(comment string) []string {
+	h.Lock()
+	defer h.Unlock()
+
+	comment = strings.TrimSpace(comment)
+	var hosts []string
+
+	for _, hsl := range h.hostFileLines {
+		if hsl.Comment == comment {
+			hosts = append(hosts, hsl.Hostnames...)
+		}
+	}
+
+	return hosts
+}
+
 // HostAddressLookup returns true if the host is found, a string
 // containing the address and the index of the hfl
 func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string, int) {
@@ -433,6 +524,34 @@ func (h *Hosts) GetHostFileLines() HostFileLines {
 	return result
 }
 
+// getEffectiveMaxHostsPerLine returns the effective maximum hosts per line.
+// Returns 0 for unlimited.
+func (h *Hosts) getEffectiveMaxHostsPerLine() int {
+	if h.HostsConfig == nil {
+		// No config, use auto-detect
+		if runtime.GOOS == "windows" {
+			return DefaultMaxHostsPerLineWindows
+		}
+		return 0
+	}
+
+	if h.MaxHostsPerLine > 0 {
+		// Explicit limit set
+		return h.MaxHostsPerLine
+	}
+
+	if h.MaxHostsPerLine < 0 {
+		// Explicitly unlimited
+		return 0
+	}
+
+	// MaxHostsPerLine == 0: auto-detect based on OS
+	if runtime.GOOS == "windows" {
+		return DefaultMaxHostsPerLineWindows
+	}
+	return 0
+}
+
 func ParseHosts(path string) ([]HostFileLine, error) {
 	input, err := os.ReadFile(path)
 	if err != nil {
@@ -475,7 +594,7 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 
 		curLineSplit := strings.SplitN(curLine.Trimmed, "#", 2)
 		if len(curLineSplit) > 1 {
-			curLine.Comment = curLineSplit[1]
+			curLine.Comment = strings.TrimSpace(curLineSplit[1])
 		}
 		curLine.Trimmed = curLineSplit[0]
 
@@ -518,7 +637,7 @@ func lineFormatter(hfl HostFileLine) string {
 	}
 
 	if len(hfl.Comment) > 0 {
-		return fmt.Sprintf("%-16s %s #%s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
+		return fmt.Sprintf("%-16s %s # %s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
 	}
 	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
 }
