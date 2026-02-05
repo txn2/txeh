@@ -9,6 +9,7 @@ env:
 before:
   hooks:
     - go mod download
+    - go mod verify
 
 builds:
   - id: txeh
@@ -54,12 +55,42 @@ archives:
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
 
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
+
+sboms:
+  - artifacts: archive
+
 changelog:
   sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Security
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
   filters:
     exclude:
       - '^docs:'
       - '^test:'
+      - '^chore:'
       - Merge pull request
       - Merge branch
       - go mod tidy
