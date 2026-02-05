@@ -3,7 +3,12 @@
 
 # Etc Hosts Management Utility & Go Library
 
+[![CI](https://github.com/txn2/txeh/actions/workflows/ci.yml/badge.svg)](https://github.com/txn2/txeh/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/txn2/txeh/branch/master/graph/badge.svg)](https://codecov.io/gh/txn2/txeh)
+[![Go Report Card](https://goreportcard.com/badge/github.com/txn2/txeh)](https://goreportcard.com/report/github.com/txn2/txeh)
 [![Go Reference](https://pkg.go.dev/badge/github.com/txn2/txeh.svg)](https://pkg.go.dev/github.com/txn2/txeh)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/txn2/txeh/badge)](https://securityscorecards.dev/viewer/?uri=github.com/txn2/txeh)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 ### /etc/hosts Management
 
