@@ -1,43 +1,63 @@
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 10m
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
-    # Bug detection
-    - errcheck          # Check error returns
-    - govet             # Go vet checks
-    - staticcheck       # Static analysis
-    - ineffassign       # Detect ineffective assignments
-    - unused            # Find unused code
-    - bodyclose         # Check HTTP body close
-    - noctx             # Check context usage in HTTP
+    # ===== Bug Detection =====
+    - errcheck           # Check error returns are handled
+    - govet              # Official Go vet checks
+    - staticcheck        # Comprehensive static analysis
+    - ineffassign        # Detect ineffective assignments
+    - unused             # Find unused code
+    - bodyclose          # Ensure HTTP response bodies are closed
+    - noctx              # Check context usage in HTTP requests
+    - nilerr             # Check nil errors are returned properly
+    - nilnil             # Check for nil return with nil error
+    - contextcheck       # Check context propagation
+    - durationcheck      # Detect duration multiplication issues
+    - makezero           # Find slice append issues
+    - wastedassign       # Find wasted assignments
 
-    # Code style
-    - misspell          # Spelling mistakes
-    - unconvert         # Unnecessary conversions
-    - whitespace        # Whitespace issues
+    # ===== Code Style =====
+    - misspell           # Spelling mistakes
+    - unconvert          # Unnecessary type conversions
+    - whitespace         # Whitespace issues
 
-    # Code quality
-    - gocritic          # Comprehensive checks
-    - gocyclo           # Cyclomatic complexity
-    - nakedret          # Naked returns
-    - prealloc          # Slice preallocation
-    - predeclared       # Shadowing predeclared
+    # ===== Code Quality =====
+    - gocritic           # Comprehensive checks
+    - gocyclo            # Cyclomatic complexity
+    - gocognit           # Cognitive complexity
+    - nakedret           # Naked returns in long functions
+    - prealloc           # Slice preallocation suggestions
+    - predeclared        # Shadowing predeclared identifiers
+    - nestif             # Deeply nested ifs
+    - goconst            # Repeated strings to constants
+    - unparam            # Unused parameters
+    - errname            # Error naming conventions
+    - errorlint          # Error wrapping issues
 
-    # Security (gosec runs separately in CI for better control)
+    # ===== Security (runs separately in CI for detailed output) =====
+    # - gosec
 
 linters-settings:
   gocyclo:
     min-complexity: 15
+
+  gocognit:
+    min-complexity: 20
 
   misspell:
     locale: US
 
   nakedret:
     max-func-lines: 30
+
+  nestif:
+    min-complexity: 5
 
   gocritic:
     enabled-tags:
@@ -46,6 +66,12 @@ linters-settings:
     disabled-checks:
       - hugeParam
       - rangeValCopy
+
+  errorlint:
+    errorf: true
+    errorf-multi: true
+    asserts: true
+    comparison: true
 
 formatters:
   enable:
@@ -62,12 +88,22 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
+        - gocritic
+        - gocognit
+        - gocyclo
         - misspell
+        - unparam
 
-    # Allow long lines in generated files
+    # Allow longer functions in cmd/
+    - path: cmd/
+      linters:
+        - gocyclo
+        - gocognit
+
+    # Generated files
     - path: generated
       linters:
-        - lll
+        - all
 
   max-issues-per-linter: 50
   max-same-issues: 10
