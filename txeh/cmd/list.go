@@ -15,7 +15,7 @@ var listCmd = &cobra.Command{
 	Use:   "list [BY_TYPE] [IP|CIDR] [IP|CIDR] [IP|CIDR] ...",
 	Short: "List hostnames or IP addresses",
 	Long:  `List hostnames or IP addresses present in /etc/hosts`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		err := cmd.Help()
 		if err != nil {
 			fmt.Printf("Error: can not display help, reason: %s\n", err.Error())
