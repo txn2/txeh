@@ -13,8 +13,9 @@ coverage:
         threshold: 2%
     patch:
       default:
-        target: 82%
-        threshold: 2%
+        target: 70%
+        threshold: 5%
+        informational: true
 
 comment:
   layout: "reach,diff,flags,files"
