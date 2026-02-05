@@ -1,3 +1,6 @@
+// Package txeh provides /etc/hosts file management capabilities.
+// It offers a simple interface for adding, removing, and querying hostname-to-IP mappings
+// with thread-safe operations and cross-platform support (Linux, macOS, Windows).
 package txeh
 
 import (
@@ -12,24 +15,28 @@ import (
 	"sync"
 )
 
+// Line type constants for HostFileLine.
 const (
-	UNKNOWN = 0
-	EMPTY   = 10
-	COMMENT = 20
-	ADDRESS = 30
+	UNKNOWN = 0  // Unknown line type.
+	EMPTY   = 10 // Empty line.
+	COMMENT = 20 // Comment line starting with #.
+	ADDRESS = 30 // Address line with IP and hostnames.
 )
 
 // DefaultMaxHostsPerLineWindows is the default maximum number of hostnames per line on Windows.
 // Windows has a limitation where lines with more than ~9 hostnames may not resolve correctly.
 const DefaultMaxHostsPerLineWindows = 9
 
+// IPFamily represents the IP address family (IPv4 or IPv6).
 type IPFamily int64
 
+// IP address family constants.
 const (
-	IPFamilyV4 IPFamily = iota
-	IPFamilyV6
+	IPFamilyV4 IPFamily = iota // IPv4 address family.
+	IPFamilyV6                 // IPv6 address family.
 )
 
+// HostsConfig contains configuration for reading and writing hosts files.
 type HostsConfig struct {
 	ReadFilePath  string
 	WriteFilePath string
@@ -45,6 +52,7 @@ type HostsConfig struct {
 	MaxHostsPerLine int
 }
 
+// Hosts represents a parsed hosts file with thread-safe operations.
 type Hosts struct {
 	sync.Mutex
 	*HostsConfig
@@ -58,8 +66,10 @@ type AddressLocations map[string]int
 // to an original line number
 type HostLocations map[string]int
 
+// HostFileLines is a slice of HostFileLine entries.
 type HostFileLines []HostFileLine
 
+// HostFileLine represents a single line in a hosts file.
 type HostFileLine struct {
 	OriginalLineNum int
 	LineType        int
@@ -132,7 +142,7 @@ func (h *Hosts) SaveAs(fileName string) error {
 	h.Lock()
 	defer h.Unlock()
 
-	err := os.WriteFile(fileName, hfData, 0o644)
+	err := os.WriteFile(filepath.Clean(fileName), hfData, 0o644) // #nosec G306 -- hosts file must be world-readable (0644) for DNS resolution
 	if err != nil {
 		return err
 	}
@@ -199,7 +209,6 @@ func (h *Hosts) RemoveCIDRs(cidrs []string) error {
 
 	// loop through all the CIDR ranges (we probably have less ranges than IPs)
 	for _, cidr := range cidrs {
-
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
 			return err
@@ -342,29 +351,13 @@ func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment st
 	defer h.Unlock()
 
 	// does the host already exist
-	if ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily); ok {
-		// if the address is the same we are done
+	ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily)
+	if ok {
 		if address == exAdd {
-			return
+			return // already at correct address
 		}
-
-		// if the hostname is at a different address, go and remove it from the address
-		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
-			// for localhost, we can match more than one host
-			if isLocalhost(address) {
-				break
-			}
-			if hst == host {
-				h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
-
-				// remove the address line if empty
-				if len(h.hostFileLines[hflIdx].Hostnames) < 1 {
-					h.hostFileLines = removeHFLElement(h.hostFileLines, hflIdx)
-				}
-
-				break // unless we should continue because it could have duplicates
-			}
-		}
+		// hostname is at a different address, remove it from there
+		h.removeHostFromLineLocked(hflIdx, host, address)
 	}
 
 	// Get the effective max hosts per line limit
@@ -501,6 +494,7 @@ func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (bool, s
 	return false, "", 0
 }
 
+// RenderHostsFile returns the hosts file content as a formatted string.
 func (h *Hosts) RenderHostsFile() string {
 	h.Lock()
 	defer h.Unlock()
@@ -508,12 +502,13 @@ func (h *Hosts) RenderHostsFile() string {
 	hf := ""
 
 	for _, hfl := range h.hostFileLines {
-		hf = hf + fmt.Sprintln(lineFormatter(hfl))
+		hf += fmt.Sprintln(lineFormatter(hfl))
 	}
 
 	return hf
 }
 
+// GetHostFileLines returns a copy of all parsed host file lines.
 func (h *Hosts) GetHostFileLines() HostFileLines {
 	h.Lock()
 	defer h.Unlock()
@@ -552,16 +547,18 @@ func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 	return 0
 }
 
+// ParseHosts reads and parses a hosts file from the given path.
 func ParseHosts(path string) ([]HostFileLine, error) {
-	input, err := os.ReadFile(path)
+	input, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
 	return ParseHostsFromString(string(input))
 }
 
+// ParseHostsFromString parses hosts file content from a string.
 func ParseHostsFromString(input string) ([]HostFileLine, error) {
-	inputNormalized := strings.Replace(input, "\r\n", "\n", -1)
+	inputNormalized := strings.ReplaceAll(input, "\r\n", "\n")
 
 	dataLines := strings.Split(inputNormalized, "\n")
 	// remove extra blank line at end that does not exist in /etc/hosts file
@@ -614,7 +611,6 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 		// if we can't figure out what this line is
 		// at this point mark it as unknown
 		curLine.LineType = UNKNOWN
-
 	}
 
 	return hostFileLines, nil
@@ -625,9 +621,29 @@ func removeStringElement(slice []string, s int) []string {
 	return append(slice[:s], slice[s+1:]...)
 }
 
-// removeHFLElement removed an element of a HostFileLine slice
+// removeHFLElement removed an element of a HostFileLine slice.
 func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
 	return append(slice[:s], slice[s+1:]...)
+}
+
+// removeHostFromLineLocked removes a hostname from a specific line and cleans up empty lines.
+// Must be called with lock held. For localhost addresses, this is a no-op since
+// the same hostname can exist at multiple localhost addresses.
+func (h *Hosts) removeHostFromLineLocked(hflIdx int, host, newAddress string) {
+	if isLocalhost(newAddress) {
+		return
+	}
+
+	for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
+		if hst != host {
+			continue
+		}
+		h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
+		if len(h.hostFileLines[hflIdx].Hostnames) == 0 {
+			h.hostFileLines = removeHFLElement(h.hostFileLines, hflIdx)
+		}
+		return
+	}
 }
 
 // lineFormatter

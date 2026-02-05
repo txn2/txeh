@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/spf13/cobra"
+
 	"github.com/txn2/txeh"
 )
 
@@ -21,7 +22,7 @@ var rootCmd = &cobra.Command{
 
 Add, remove and re-associate hostname entries in your /etc/hosts file.
 Read more including usage as a Go library at https://github.com/txn2/txeh`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		err := cmd.Help()
 		if err != nil {
 			fmt.Printf("Error: can not display help, reason: %s\n", err.Error())
@@ -31,7 +32,7 @@ Read more including usage as a Go library at https://github.com/txn2/txeh`,
 		fmt.Println("Please specify a sub-command such as \"add\" or \"remove\"")
 		os.Exit(1)
 	},
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		initEtcHosts()
 	},
 }

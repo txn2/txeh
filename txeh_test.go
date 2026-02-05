@@ -12,7 +12,7 @@ import (
 var mockHostsData = `127.0.0.1        localhost
 127.0.1.1        straylight-desk
 127.0.1.1        bad-idea
-# /etc/hosts is not DNS and one should not expect consistent behaviour when assigning a host to multiple
+# /etc/hosts is not DNS and one should not expect consistent behavior when assigning a host to multiple
 # IP addresses. TODO - Support for duplicate hostname for IPv4 and IPv6
 # see - "man 5 hosts"
 # IP_address canonical_hostname [aliases...]
@@ -144,171 +144,112 @@ func TestNewHosts(t *testing.T) {
 	}
 }
 
-func TestMethods(t *testing.T) {
-	mockHosts, err := NewHosts(&HostsConfig{
-		RawText: &mockHostsData,
-	})
-	if err != nil {
-		t.Fatalf("TestMockHosts failed on NewHosts: %v", err)
+// requireHostsByIPCount asserts that ListHostsByIP returns exactly expected hosts.
+func requireHostsByIPCount(t *testing.T, hosts *Hosts, ip string, expected int) {
+	t.Helper()
+	got := hosts.ListHostsByIP(ip)
+	if len(got) != expected {
+		t.Fatalf("ListHostsByIP(%q): got %d hosts, want %d", ip, len(got), expected)
 	}
+}
+
+// requireAddressesByHostCount asserts that ListAddressesByHost returns exactly expected results.
+func requireAddressesByHostCount(t *testing.T, hosts *Hosts, host string, exact bool, expected int) {
+	t.Helper()
+	got := hosts.ListAddressesByHost(host, exact)
+	if len(got) != expected {
+		t.Fatalf("ListAddressesByHost(%q, exact=%v): got %d, want %d", host, exact, len(got), expected)
+	}
+}
+
+// requireHostsByCIDRCount asserts that ListHostsByCIDR returns exactly expected hosts.
+func requireHostsByCIDRCount(t *testing.T, hosts *Hosts, cidr string, expected int) {
+	t.Helper()
+	got := hosts.ListHostsByCIDR(cidr)
+	if len(got) != expected {
+		t.Fatalf("ListHostsByCIDR(%q): got %d hosts, want %d", cidr, len(got), expected)
+	}
+}
+
+// newMockHosts creates a Hosts instance from mockHostsData for testing.
+func newMockHosts(t *testing.T) *Hosts {
+	t.Helper()
+	hosts, err := NewHosts(&HostsConfig{RawText: &mockHostsData})
+	if err != nil {
+		t.Fatalf("NewHosts failed: %v", err)
+	}
+	return hosts
+}
+
+func TestMethods(t *testing.T) {
+	mockHosts := newMockHosts(t)
 
 	// get IP for localhost
 	ok, ipString, _ := mockHosts.HostAddressLookup("localhost", IPFamilyV4)
 	if !ok {
-		t.Fatalf("TestMockHosts could not find IPv4 address for localhost")
+		t.Fatalf("could not find IPv4 address for localhost")
 	}
 	if ipString != "127.0.0.1" {
-		t.Fatalf("TestMockHosts returned incorrect IPv4 address for localhost")
+		t.Fatalf("returned incorrect IPv4 address for localhost: %s", ipString)
 	}
 
-	// Test ListAddressesByHost exact
-	hostList := mockHosts.ListAddressesByHost("nifi", true)
-	if len(hostList) != 1 {
-		t.Fatalf("ListAddressesByHost returned returned invalid number of hosts for exact match")
-	}
-
-	// Test ListAddressesByHost
-	hostList = mockHosts.ListAddressesByHost("nifi", false)
-	if len(hostList) != 70 {
-		t.Fatalf("ListAddressesByHost returned returned invalid number of hosts")
-	}
-
-	// Test ListHostsByCIDR expect one
-	hostList = mockHosts.ListHostsByCIDR("127.0.0.0/24")
-	if len(hostList) != 1 {
-		t.Fatalf("ListHostsByCIDR returned returned "+
-			"invalid number of hosts for 127.0.0.0/24 got %v expecting 1", len(hostList))
-	}
-
-	// Test ListHostsByCIDR expect multiple
-	hostList = mockHosts.ListHostsByCIDR("127.1.27.0/24")
-	if len(hostList) != 252 {
-		t.Fatalf("ListHostsByCIDR returned returned "+
-			"invalid number of hosts for 127.0.0.0/24 got %v expecting 252", len(hostList))
-	}
-
-	// Test ListHostsByIP expect one
-	ipHostList := mockHosts.ListHostsByIP("127.0.0.1")
-	if len(ipHostList) != 1 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.0.0.1 got %v expecting 1", len(ipHostList))
-	}
-
-	// Test ListHostsByIP expect multiple
-	ipHostList = mockHosts.ListHostsByIP("127.1.27.1")
-	if len(ipHostList) != 7 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.1.27.1 got %v expecting 7", len(ipHostList))
-	}
-
-	// Test ListHostsByIP expect multiple
-	ipHostList = mockHosts.ListHostsByIP("127.1.27.2")
-	if len(ipHostList) != 7 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.1.27.2 got %v expecting 7", len(ipHostList))
-	}
+	requireAddressesByHostCount(t, mockHosts, "nifi", true, 1)
+	requireAddressesByHostCount(t, mockHosts, "nifi", false, 70)
+	requireHostsByCIDRCount(t, mockHosts, "127.0.0.0/24", 1)
+	requireHostsByCIDRCount(t, mockHosts, "127.1.27.0/24", 252)
+	requireHostsByIPCount(t, mockHosts, "127.0.0.1", 1)
+	requireHostsByIPCount(t, mockHosts, "127.1.27.1", 7)
+	requireHostsByIPCount(t, mockHosts, "127.1.27.2", 7)
 
 	// Test RemoveAddress
 	mockHosts.RemoveAddress("127.1.27.1")
-	ipHostList = mockHosts.ListHostsByIP("127.1.27.1")
-	if len(ipHostList) != 0 {
-		t.Fatalf("RemoveAddress then ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.1.27.1 got %v expecting 0", len(ipHostList))
-	}
+	requireHostsByIPCount(t, mockHosts, "127.1.27.1", 0)
 
-	// Get list of hosts for 127.1.27.2 and 127.1.27.3
-	ipHostList2Len := len(mockHosts.ListHostsByIP("127.1.27.2"))
-	ipHostList3Len := len(mockHosts.ListHostsByIP("127.1.27.3"))
-	if ipHostList2Len+ipHostList3Len != 14 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.1.27.2 and 127.1.27.3 got %v expecting 14", ipHostList2Len+ipHostList3Len)
+	// Verify combined host counts before RemoveAddresses
+	combined := len(mockHosts.ListHostsByIP("127.1.27.2")) + len(mockHosts.ListHostsByIP("127.1.27.3"))
+	if combined != 14 {
+		t.Fatalf("combined hosts for 127.1.27.2 and 127.1.27.3: got %d, want 14", combined)
 	}
 
 	// Test RemoveAddresses
 	mockHosts.RemoveAddresses([]string{"127.1.27.2", "127.1.27.3"})
-	ipHostList2Len = len(mockHosts.ListHostsByIP("127.1.27.2"))
-	ipHostList3Len = len(mockHosts.ListHostsByIP("127.1.27.3"))
-	if ipHostList2Len+ipHostList3Len != 0 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for 127.1.27.2 and 127.1.27.3 got %v expecting 0", ipHostList2Len+ipHostList3Len)
-	}
+	requireHostsByIPCount(t, mockHosts, "127.1.27.2", 0)
+	requireHostsByIPCount(t, mockHosts, "127.1.27.3", 0)
 
+	// Test superset host operations
+	requireAddressesByHostCount(t, mockHosts, "superset", true, 1)
 	supersetAddresses := mockHosts.ListAddressesByHost("superset", true)
-	if len(supersetAddresses) != 1 {
-		t.Fatalf("ListAddressesByHost returned returned "+
-			"invalid number of hosts for superset got %v expecting 1", len(supersetAddresses))
-	}
+	supersetIP := supersetAddresses[0][0]
+	requireHostsByIPCount(t, mockHosts, supersetIP, 7)
 
-	hostsAtAddress := mockHosts.ListHostsByIP(supersetAddresses[0][0])
-	if len(hostsAtAddress) != 7 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting 7", supersetAddresses[0][0], len(hostsAtAddress))
-	}
-
-	// Test RemoveHost
 	mockHosts.RemoveHost("superset")
-	hostsAtAddress = mockHosts.ListHostsByIP(supersetAddresses[0][0])
-	if len(hostsAtAddress) != 6 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting 7", supersetAddresses[0][0], len(hostsAtAddress))
-	}
+	requireHostsByIPCount(t, mockHosts, supersetIP, 6)
 
-	// Test RemoveHosts
 	mockHosts.RemoveHosts([]string{"superset.d4l-demo.svc", "superset.d4l-demo.svc.dwdev4"})
-	hostsAtAddress = mockHosts.ListHostsByIP(supersetAddresses[0][0])
-	if len(hostsAtAddress) != 4 {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting 7", supersetAddresses[0][0], len(hostsAtAddress))
-	}
+	requireHostsByIPCount(t, mockHosts, supersetIP, 4)
 
-	// Test Add Host
+	// Test AddHost / AddHosts
 	ip := "127.1.27.5"
-	expect := 7
-	hostsAtAddress = mockHosts.ListHostsByIP(ip)
-	if len(hostsAtAddress) != expect {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting %v", ip, len(hostsAtAddress), expect)
-	}
+	requireHostsByIPCount(t, mockHosts, ip, 7)
 	mockHosts.AddHost(ip, "test")
-	expect = 8
-	hostsAtAddress = mockHosts.ListHostsByIP(ip)
-	if len(hostsAtAddress) != expect {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting %v", ip, len(hostsAtAddress), expect)
-	}
+	requireHostsByIPCount(t, mockHosts, ip, 8)
 	mockHosts.AddHosts(ip, []string{"test-0", "test-1", "test-2"})
-	expect = 11
-	hostsAtAddress = mockHosts.ListHostsByIP(ip)
-	if len(hostsAtAddress) != expect {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting %v", ip, len(hostsAtAddress), expect)
-	}
+	requireHostsByIPCount(t, mockHosts, ip, 11)
 
-	// test line with comment and bad host should treat existing bad host as legit host
-	// since this is not a "cleaner" utility
-	ip = "127.1.27.24"
-	expect = 7
-	hostsAtAddress = mockHosts.ListHostsByIP(ip)
-	if len(hostsAtAddress) != expect {
-		t.Fatalf("ListHostsByIP returned returned "+
-			"invalid number of hosts for %v got %v expecting %v", ip, len(hostsAtAddress), expect)
-	}
+	// Line with comment and bad host should treat existing bad host as legit
+	requireHostsByIPCount(t, mockHosts, "127.1.27.24", 7)
 
-	// remove addresses in 127.1.27.0/16 range
+	// Remove addresses in CIDR range
 	if err := mockHosts.RemoveCIDRs([]string{"127.1.27.0/16"}); err != nil {
 		t.Fatalf("RemoveCIDRs failed: %v", err)
 	}
 
 	hfl := strings.Split(mockHosts.RenderHostsFile(), "\n")
-	lines := 19
-	if len(hfl) != lines {
-		t.Fatalf("Expeced %d lines and got %d", lines, len(hfl))
+	if len(hfl) != 19 {
+		t.Fatalf("expected 19 lines, got %d", len(hfl))
 	}
-
-	line := 17
-	expectString := "# existing comment"
-	if hfl[line] != expectString {
-		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+	if hfl[17] != "# existing comment" {
+		t.Fatalf("expected %q on line 17, got %q", "# existing comment", hfl[17])
 	}
 }
 

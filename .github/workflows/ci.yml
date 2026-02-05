@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v9.2.0
+        with:
+          version: latest
+          args: --timeout=5m
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909  # v5.5.2
+        with:
+          files: coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Verify dependencies
+        run: go mod verify
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run gosec
+        uses: securego/gosec@b72378a2da300339c40788e1eddf1ddea6498558  # v2.22.11
+        with:
+          args: ./...
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
