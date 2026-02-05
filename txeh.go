@@ -199,7 +199,6 @@ func (h *Hosts) RemoveCIDRs(cidrs []string) error {
 
 	// loop through all the CIDR ranges (we probably have less ranges than IPs)
 	for _, cidr := range cidrs {
-
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
 			return err
@@ -342,29 +341,13 @@ func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment st
 	defer h.Unlock()
 
 	// does the host already exist
-	if ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily); ok {
-		// if the address is the same we are done
+	ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily)
+	if ok {
 		if address == exAdd {
-			return
+			return // already at correct address
 		}
-
-		// if the hostname is at a different address, go and remove it from the address
-		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
-			// for localhost, we can match more than one host
-			if isLocalhost(address) {
-				break
-			}
-			if hst == host {
-				h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
-
-				// remove the address line if empty
-				if len(h.hostFileLines[hflIdx].Hostnames) < 1 {
-					h.hostFileLines = removeHFLElement(h.hostFileLines, hflIdx)
-				}
-
-				break // unless we should continue because it could have duplicates
-			}
-		}
+		// hostname is at a different address, remove it from there
+		h.removeHostFromLineLocked(hflIdx, host, address)
 	}
 
 	// Get the effective max hosts per line limit
@@ -508,7 +491,7 @@ func (h *Hosts) RenderHostsFile() string {
 	hf := ""
 
 	for _, hfl := range h.hostFileLines {
-		hf = hf + fmt.Sprintln(lineFormatter(hfl))
+		hf += fmt.Sprintln(lineFormatter(hfl))
 	}
 
 	return hf
@@ -561,7 +544,7 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 }
 
 func ParseHostsFromString(input string) ([]HostFileLine, error) {
-	inputNormalized := strings.Replace(input, "\r\n", "\n", -1)
+	inputNormalized := strings.ReplaceAll(input, "\r\n", "\n")
 
 	dataLines := strings.Split(inputNormalized, "\n")
 	// remove extra blank line at end that does not exist in /etc/hosts file
@@ -614,7 +597,6 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 		// if we can't figure out what this line is
 		// at this point mark it as unknown
 		curLine.LineType = UNKNOWN
-
 	}
 
 	return hostFileLines, nil
@@ -625,9 +607,29 @@ func removeStringElement(slice []string, s int) []string {
 	return append(slice[:s], slice[s+1:]...)
 }
 
-// removeHFLElement removed an element of a HostFileLine slice
+// removeHFLElement removed an element of a HostFileLine slice.
 func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
 	return append(slice[:s], slice[s+1:]...)
+}
+
+// removeHostFromLineLocked removes a hostname from a specific line and cleans up empty lines.
+// Must be called with lock held. For localhost addresses, this is a no-op since
+// the same hostname can exist at multiple localhost addresses.
+func (h *Hosts) removeHostFromLineLocked(hflIdx int, host, newAddress string) {
+	if isLocalhost(newAddress) {
+		return
+	}
+
+	for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
+		if hst != host {
+			continue
+		}
+		h.hostFileLines[hflIdx].Hostnames = removeStringElement(h.hostFileLines[hflIdx].Hostnames, hidx)
+		if len(h.hostFileLines[hflIdx].Hostnames) == 0 {
+			h.hostFileLines = removeHFLElement(h.hostFileLines, hflIdx)
+		}
+		return
+	}
 }
 
 // lineFormatter
