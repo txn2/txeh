@@ -4,3 +4,4 @@ dist
 coverage.out
 .claude
 RELEASE_*
+NOTES_*
