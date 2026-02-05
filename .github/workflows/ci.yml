@@ -66,7 +66,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Run gosec
-        uses: securego/gosec@b72378a2da300339c40788e1eddf1ddea6498558  # v2.22.11
+        uses: securego/gosec@424fc4cd9c82ea0fd6bee9cd49c2db2c3cc0c93f  # v2.22.11
         with:
           args: ./...
 
