@@ -35,8 +35,6 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.expand
     - navigation.top
     - navigation.footer
     - search.suggest
@@ -52,23 +50,10 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - CLI:
-    - Overview: cli/index.md
-    - Installation: cli/installation.md
-    - Commands: cli/commands.md
-  - Go Library:
-    - Overview: library/index.md
-    - Quick Start: library/quickstart.md
-    - API Reference: library/api.md
-  - Guides:
-    - Comments: guides/comments.md
-    - CIDR Operations: guides/cidr.md
-  - Reference:
-    - Architecture: reference/architecture.md
-    - Configuration: reference/configuration.md
-  - Support:
-    - Troubleshooting: support/troubleshooting.md
-    - Changelog: support/changelog.md
+  - CLI Reference: cli.md
+  - Go Library: library.md
+  - API Reference: api.md
+  - Troubleshooting: troubleshooting.md
 
 extra:
   social:

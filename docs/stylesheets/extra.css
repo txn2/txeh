@@ -148,12 +148,6 @@
 
 /* ===== HOME PAGE ===== */
 
-/* HIDE THE "HOME" TITLE */
-.md-content h1,
-.md-typeset h1:first-of-type {
-  display: none !important;
-}
-
 .md-main__inner {
   margin-top: 0;
 }
@@ -254,6 +248,14 @@
 .feature-icon {
   font-size: 1.5rem;
   line-height: 1;
+}
+
+.feature-icon p {
+  margin: 0;
+}
+
+.feature > div p {
+  margin: 0;
 }
 
 .feature strong {

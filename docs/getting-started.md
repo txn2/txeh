@@ -82,6 +82,6 @@ func main() {
 
 ## Next Steps
 
-- [CLI Commands Reference](cli/commands.md) -- Full CLI documentation
-- [Go Library Quick Start](library/quickstart.md) -- Detailed library usage
-- [Working with Comments](guides/comments.md) -- Organize entries with inline comments
+- [CLI Reference](cli.md): Full CLI documentation.
+- [Go Library](library.md): Detailed library usage.
+- [API Reference](api.md): Complete type and method reference.

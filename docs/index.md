@@ -1,4 +1,9 @@
-# txeh
+---
+title: txeh
+hide:
+  - toc
+  - title
+---
 
 <div class="home-hero" markdown>
   <img src="images/logo.png" alt="txeh" class="hero-logo">
@@ -18,26 +23,67 @@ Thread-safe, cross-platform, and built to support tools like [kubefwd](https://g
   <a href="https://github.com/txn2/txeh" class="btn btn-secondary">GitHub</a>
 </div>
 
-<div class="home-features">
-  <div class="feature">
-    <div class="feature-icon">:material-lock-outline:</div>
-    <div><strong>Thread-Safe</strong><span>Mutex-protected operations for safe concurrent use</span></div>
-  </div>
-  <div class="feature">
-    <div class="feature-icon">:material-ip-network:</div>
-    <div><strong>IPv4 & IPv6</strong><span>Full support for both address families</span></div>
-  </div>
-  <div class="feature">
-    <div class="feature-icon">:material-select-group:</div>
-    <div><strong>CIDR Operations</strong><span>Bulk add/remove by CIDR range</span></div>
-  </div>
-  <div class="feature">
-    <div class="feature-icon">:material-monitor:</div>
-    <div><strong>Cross-Platform</strong><span>Linux, macOS, and Windows</span></div>
-  </div>
+<div class="home-features" markdown>
+
+<div class="feature" markdown>
+<div class="feature-icon" markdown>
+
+:material-lock-outline:
+
+</div>
+<div markdown>
+
+**Thread-Safe**
+<span>Mutex-protected operations for safe concurrent use</span>
+
+</div>
 </div>
 
-<div class="home-install">
+<div class="feature" markdown>
+<div class="feature-icon" markdown>
+
+:material-ip-network:
+
+</div>
+<div markdown>
+
+**IPv4 & IPv6**
+<span>Full support for both address families</span>
+
+</div>
+</div>
+
+<div class="feature" markdown>
+<div class="feature-icon" markdown>
+
+:material-select-group:
+
+</div>
+<div markdown>
+
+**CIDR Operations**
+<span>Bulk add/remove by CIDR range</span>
+
+</div>
+</div>
+
+<div class="feature" markdown>
+<div class="feature-icon" markdown>
+
+:material-monitor:
+
+</div>
+<div markdown>
+
+**Cross-Platform**
+<span>Linux, macOS, and Windows</span>
+
+</div>
+</div>
+
+</div>
+
+<div class="home-install" markdown>
 
 ```bash
 brew install txn2/tap/txeh
@@ -45,7 +91,7 @@ brew install txn2/tap/txeh
 
 </div>
 
-<div class="home-footer">
+<div class="home-footer" markdown>
 
 [![CI](https://github.com/txn2/txeh/actions/workflows/ci.yml/badge.svg)](https://github.com/txn2/txeh/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/txn2/txeh/branch/master/graph/badge.svg)](https://codecov.io/gh/txn2/txeh)
