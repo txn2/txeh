@@ -1,3 +1,4 @@
+// Package cmd implements the txeh command-line interface.
 package cmd
 
 import (
@@ -28,7 +29,7 @@ Examples:
   txeh add 127.0.0.1 myhost
   txeh add 127.0.0.1 myhost --comment "managed-by-myapp"
   txeh add 127.0.0.1 svc1 svc2 svc3 -c "kubefwd"`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		if len(args) < 2 {
 			return errors.New("the \"add\" command requires an IP address and at least one hostname")
 		}
@@ -43,7 +44,7 @@ Examples:
 
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		if !Quiet {
 			if addComment != "" {
 				fmt.Printf("Adding host(s) \"%s\" to IP address %s with comment \"%s\"\n", strings.Join(args[1:], " "), args[0], addComment)
@@ -56,6 +57,7 @@ Examples:
 	},
 }
 
+// AddHosts adds hostnames to an IP address with an optional comment.
 func AddHosts(ip string, hosts []string, comment string) {
 	if comment != "" {
 		etcHosts.AddHostsWithComment(ip, hosts, comment)
