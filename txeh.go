@@ -142,7 +142,7 @@ func (h *Hosts) SaveAs(fileName string) error {
 	h.Lock()
 	defer h.Unlock()
 
-	err := os.WriteFile(fileName, hfData, 0o644)
+	err := os.WriteFile(filepath.Clean(fileName), hfData, 0o644) // #nosec G306 -- hosts file must be world-readable (0644) for DNS resolution
 	if err != nil {
 		return err
 	}
@@ -549,7 +549,7 @@ func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 
 // ParseHosts reads and parses a hosts file from the given path.
 func ParseHosts(path string) ([]HostFileLine, error) {
-	input, err := os.ReadFile(path)
+	input, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
