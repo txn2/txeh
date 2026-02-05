@@ -11,7 +11,7 @@ copyright: Copyright &copy; 2018 - 2026 Craig Johnston / Deasil Works, Inc.
 theme:
   name: material
   custom_dir: docs/overrides
-  logo: images/logo.png
+  logo: images/txn2-logo.png
   favicon: images/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -37,6 +37,7 @@ theme:
     - navigation.tabs.sticky
     - navigation.top
     - navigation.footer
+    - toc.integrate
     - search.suggest
     - search.highlight
     - search.share
