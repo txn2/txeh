@@ -25,6 +25,8 @@ help:
 	@echo "  update           - Update dependencies"
 	@echo "  image            - Build Docker image"
 	@echo "  clean            - Clean build artifacts"
+	@echo "  dead-code        - Check for unreachable code"
+	@echo "  mutate           - Run mutation testing"
 	@echo "  all              - Run verify and build"
 	@echo "  help             - Show this help message"
 	@echo ""
@@ -118,6 +120,23 @@ docs:
 docs-build:
 	pip install -r requirements-docs.txt
 	mkdocs build --strict
+
+# Public API methods not called within the module are excluded.
+# See: Hosts.Reload, Hosts.RemoveByComments, Hosts.HostAddressLookup
+DEADCODE_EXCLUDE := Hosts\.Reload|Hosts\.RemoveByComments|Hosts\.HostAddressLookup
+
+.PHONY: dead-code
+dead-code:
+	@OUTPUT=$$(deadcode ./... 2>&1 | grep -Ev '$(DEADCODE_EXCLUDE)') || true; \
+	if [ -n "$$OUTPUT" ]; then \
+		echo "Dead code detected:"; \
+		echo "$$OUTPUT"; \
+		exit 1; \
+	fi
+
+.PHONY: mutate
+mutate:
+	gremlins unleash --threshold 60 ./...
 
 .PHONY: check
 check:
