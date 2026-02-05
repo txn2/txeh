@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is the application version, set by goreleaser.
 var Version = "0.0.0"
 
 func init() {
@@ -17,13 +18,13 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of txeh",
 	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		version := VersionFromBuild()
 		fmt.Printf("txeh Version: %s\n", version)
 	},
 }
 
-// VersionFromBuild Version returns the version of txeh binary
+// VersionFromBuild returns the version of txeh binary.
 func VersionFromBuild() (version string) {
 	// Version is managed with goreleaser
 	if Version != "0.0.0" {
