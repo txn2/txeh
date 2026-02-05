@@ -12,7 +12,7 @@ import (
 var mockHostsData = `127.0.0.1        localhost
 127.0.1.1        straylight-desk
 127.0.1.1        bad-idea
-# /etc/hosts is not DNS and one should not expect consistent behaviour when assigning a host to multiple
+# /etc/hosts is not DNS and one should not expect consistent behavior when assigning a host to multiple
 # IP addresses. TODO - Support for duplicate hostname for IPv4 and IPv6
 # see - "man 5 hosts"
 # IP_address canonical_hostname [aliases...]
