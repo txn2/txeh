@@ -9,8 +9,15 @@ txeh is a Go library and CLI utility for managing /etc/hosts file entries. It pr
 ## Common Commands
 
 ```bash
-# Run tests
-go test ./...
+# Complete verification suite
+make verify
+
+# Individual checks
+go test -race ./...
+go vet ./...
+golangci-lint run ./...
+gosec ./...
+govulncheck ./...
 
 # Run a single test
 go test -run TestMethodName
@@ -23,6 +30,9 @@ go install ./txeh
 
 # Build test release (requires goreleaser)
 goreleaser --skip-publish --clean --skip-validate
+
+# Generate coverage report
+make coverage
 ```
 
 ## Architecture
@@ -49,3 +59,30 @@ The codebase has two main components:
 - Cross-platform: auto-detects Windows hosts file location via SystemRoot env var
 - `RawText` config option allows in-memory parsing without file I/O (useful for testing)
 - CIDR range operations for bulk removal of address blocks
+
+## Code Standards
+
+- All code must follow [Effective Go](https://go.dev/doc/effective_go) guidelines
+- Test coverage minimum: 80%
+- Cyclomatic complexity maximum: 15
+- All exported functions require documentation
+- Error messages should be lowercase, no punctuation
+
+## Git Policy
+
+- A human must review and approve every line of code before commit
+- Never commit generated code without human review
+- Use conventional commit messages:
+  - `feat:` New features
+  - `fix:` Bug fixes
+  - `docs:` Documentation changes
+  - `test:` Test additions/changes
+  - `refactor:` Code refactoring
+  - `chore:` Maintenance tasks
+
+## Testing Requirements
+
+- Unit tests for all packages
+- Race detection: `go test -race ./...`
+- Coverage threshold: 80%+
+- Run `make verify` before submitting PRs
