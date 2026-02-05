@@ -17,7 +17,7 @@ var removeHostCmd = &cobra.Command{
 	Use:   "host [HOSTNAME] [HOSTNAME] [HOSTNAME]...",
 	Short: "Remove hostnames from /etc/hosts",
 	Long:  `Remove one or more hostnames from /etc/hosts`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		if len(args) < 1 {
 			return errors.New("the \"remove hosts\" command requires at least one hostname to remove")
 		}
@@ -28,7 +28,7 @@ var removeHostCmd = &cobra.Command{
 
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		if !Quiet {
 			fmt.Printf("Removing host(s) \"%s\"\n", strings.Join(args, " "))
 		}
@@ -37,6 +37,7 @@ var removeHostCmd = &cobra.Command{
 	},
 }
 
+// RemoveHosts removes the given hostnames from the hosts file.
 func RemoveHosts(hosts []string) {
 	etcHosts.RemoveHosts(hosts)
 
