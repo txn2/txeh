@@ -1,3 +1,6 @@
+// Package txeh provides /etc/hosts file management capabilities.
+// It offers a simple interface for adding, removing, and querying hostname-to-IP mappings
+// with thread-safe operations and cross-platform support (Linux, macOS, Windows).
 package txeh
 
 import (
@@ -12,24 +15,28 @@ import (
 	"sync"
 )
 
+// Line type constants for HostFileLine.
 const (
-	UNKNOWN = 0
-	EMPTY   = 10
-	COMMENT = 20
-	ADDRESS = 30
+	UNKNOWN = 0  // Unknown line type.
+	EMPTY   = 10 // Empty line.
+	COMMENT = 20 // Comment line starting with #.
+	ADDRESS = 30 // Address line with IP and hostnames.
 )
 
 // DefaultMaxHostsPerLineWindows is the default maximum number of hostnames per line on Windows.
 // Windows has a limitation where lines with more than ~9 hostnames may not resolve correctly.
 const DefaultMaxHostsPerLineWindows = 9
 
+// IPFamily represents the IP address family (IPv4 or IPv6).
 type IPFamily int64
 
+// IP address family constants.
 const (
-	IPFamilyV4 IPFamily = iota
-	IPFamilyV6
+	IPFamilyV4 IPFamily = iota // IPv4 address family.
+	IPFamilyV6                 // IPv6 address family.
 )
 
+// HostsConfig contains configuration for reading and writing hosts files.
 type HostsConfig struct {
 	ReadFilePath  string
 	WriteFilePath string
@@ -45,6 +52,7 @@ type HostsConfig struct {
 	MaxHostsPerLine int
 }
 
+// Hosts represents a parsed hosts file with thread-safe operations.
 type Hosts struct {
 	sync.Mutex
 	*HostsConfig
@@ -58,8 +66,10 @@ type AddressLocations map[string]int
 // to an original line number
 type HostLocations map[string]int
 
+// HostFileLines is a slice of HostFileLine entries.
 type HostFileLines []HostFileLine
 
+// HostFileLine represents a single line in a hosts file.
 type HostFileLine struct {
 	OriginalLineNum int
 	LineType        int
@@ -484,6 +494,7 @@ func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (bool, s
 	return false, "", 0
 }
 
+// RenderHostsFile returns the hosts file content as a formatted string.
 func (h *Hosts) RenderHostsFile() string {
 	h.Lock()
 	defer h.Unlock()
@@ -497,6 +508,7 @@ func (h *Hosts) RenderHostsFile() string {
 	return hf
 }
 
+// GetHostFileLines returns a copy of all parsed host file lines.
 func (h *Hosts) GetHostFileLines() HostFileLines {
 	h.Lock()
 	defer h.Unlock()
@@ -535,6 +547,7 @@ func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 	return 0
 }
 
+// ParseHosts reads and parses a hosts file from the given path.
 func ParseHosts(path string) ([]HostFileLine, error) {
 	input, err := os.ReadFile(path)
 	if err != nil {
@@ -543,6 +556,7 @@ func ParseHosts(path string) ([]HostFileLine, error) {
 	return ParseHostsFromString(string(input))
 }
 
+// ParseHostsFromString parses hosts file content from a string.
 func ParseHostsFromString(input string) ([]HostFileLine, error) {
 	inputNormalized := strings.ReplaceAll(input, "\r\n", "\n")
 
