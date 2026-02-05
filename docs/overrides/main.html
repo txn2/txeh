@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ config.site_url }}">
+  <meta property="og:title" content="{{ config.site_name }} - /etc/hosts Management">
+  <meta property="og:description" content="{{ config.site_description }}">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="{{ config.site_url }}">
+  <meta name="twitter:title" content="{{ config.site_name }} - /etc/hosts Management">
+  <meta name="twitter:description" content="{{ config.site_description }}">
+  <meta name="twitter:creator" content="@cjimti">
+{% endblock %}
