@@ -302,13 +302,13 @@ func TestMethods(t *testing.T) {
 	hfl := strings.Split(mockHosts.RenderHostsFile(), "\n")
 	lines := 19
 	if len(hfl) != lines {
-		t.Fatalf("Expeced %d lines and got %d", lines, len(hfl))
+		t.Fatalf("Expected %d lines and got %d", lines, len(hfl))
 	}
 
 	line := 17
 	expectString := "# existing comment"
 	if hfl[line] != expectString {
-		t.Fatalf("Expeced \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
+		t.Fatalf("Expected \"%s\" on line %d. Got \"%s\"", expectString, line, hfl[line])
 	}
 }
 

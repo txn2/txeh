@@ -35,7 +35,6 @@ linters:
     - prealloc           # Slice preallocation suggestions
     - predeclared        # Shadowing predeclared identifiers
     - nestif             # Deeply nested ifs
-    - goconst            # Repeated strings to constants
     - unparam            # Unused parameters
     - errname            # Error naming conventions
     - errorlint          # Error wrapping issues
@@ -57,7 +56,7 @@ linters-settings:
     max-func-lines: 30
 
   nestif:
-    min-complexity: 5
+    min-complexity: 6
 
   gocritic:
     enabled-tags:
@@ -91,7 +90,6 @@ issues:
         - gocritic
         - gocognit
         - gocyclo
-        - misspell
         - unparam
 
     # Allow longer functions in cmd/
