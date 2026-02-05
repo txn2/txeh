@@ -17,7 +17,7 @@ var removeCidrCmd = &cobra.Command{
 	Use:   "cidr [CIDR] [CIDR] [CIDR]...",
 	Short: "Remove ranges of addresses from /etc/hosts",
 	Long:  `Remove one or more CIDR ranges of IP addresses from /etc/hosts`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		if len(args) < 1 {
 			return errors.New("the \"remove cidr\" command requires at least one CIDR range to remove")
 		}
@@ -28,7 +28,7 @@ var removeCidrCmd = &cobra.Command{
 
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		if !Quiet {
 			fmt.Printf("Removing ip ranges(s) \"%s\"\n", strings.Join(args, " "))
 		}
@@ -37,6 +37,7 @@ var removeCidrCmd = &cobra.Command{
 	},
 }
 
+// RemoveIPRanges removes IP addresses in the given CIDR ranges from the hosts file.
 func RemoveIPRanges(cidrs []string) {
 	err := etcHosts.RemoveCIDRs(cidrs)
 	if err != nil {
