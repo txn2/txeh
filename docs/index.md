@@ -1,103 +1,102 @@
 ---
-title: txeh
 hide:
   - toc
-  - title
 ---
 
-<div class="home-hero" markdown>
-  <img src="images/logo.png" alt="txeh" class="hero-logo">
+<div style="text-align: center; margin: 2rem 0;">
+  <img src="images/logo.png" alt="txeh" style="max-width: 400px;">
 </div>
 
-<div class="home-intro" markdown>
+# txn2/txeh
 
-<span class="hero-highlight">/etc/hosts management as a Go library and CLI utility.</span>
+/etc/hosts management as a Go library and CLI utility. Programmatic and command-line access to add, remove, and query hostname-to-IP mappings. Thread-safe, cross-platform, and built to support tools like [kubefwd](https://github.com/txn2/kubefwd).
 
-Programmatic and command-line access to add, remove, and query hostname-to-IP mappings.
-Thread-safe, cross-platform, and built to support tools like [kubefwd](https://github.com/txn2/kubefwd).
+[Get Started](getting-started.md){ .md-button .md-button--primary }
+[View on GitHub](https://github.com/txn2/txeh){ .md-button }
 
-</div>
+## Two Ways to Use
 
-<div class="home-buttons">
-  <a href="getting-started/" class="btn btn-primary">Get Started</a>
-  <a href="https://github.com/txn2/txeh" class="btn btn-secondary">GitHub</a>
-</div>
+<div class="grid cards" markdown>
 
-<div class="home-features" markdown>
+-   :material-console:{ .lg .middle } **Use the CLI**
 
-<div class="feature" markdown>
-<div class="feature-icon" markdown>
+    ---
 
-:material-lock-outline:
+    Manage `/etc/hosts` entries from the command line.
 
-</div>
-<div markdown>
+    - Add, remove, list hostnames
+    - CIDR range operations
+    - Dry run mode for previewing changes
 
-**Thread-Safe**
-<span>Mutex-protected operations for safe concurrent use</span>
+    [:octicons-arrow-right-24: CLI Reference](cli.md)
 
-</div>
-</div>
+-   :material-code-braces:{ .lg .middle } **Use the Go Library**
 
-<div class="feature" markdown>
-<div class="feature-icon" markdown>
+    ---
 
-:material-ip-network:
+    Import into your Go application for programmatic hosts file management.
 
-</div>
-<div markdown>
+    - Thread-safe with mutex locking
+    - In-memory mode from strings
+    - Inline comment support
 
-**IPv4 & IPv6**
-<span>Full support for both address families</span>
-
-</div>
-</div>
-
-<div class="feature" markdown>
-<div class="feature-icon" markdown>
-
-:material-select-group:
-
-</div>
-<div markdown>
-
-**CIDR Operations**
-<span>Bulk add/remove by CIDR range</span>
-
-</div>
-</div>
-
-<div class="feature" markdown>
-<div class="feature-icon" markdown>
-
-:material-monitor:
-
-</div>
-<div markdown>
-
-**Cross-Platform**
-<span>Linux, macOS, and Windows</span>
-
-</div>
-</div>
+    [:octicons-arrow-right-24: Library docs](library.md)
 
 </div>
 
-<div class="home-install" markdown>
+## Core Features
 
-```bash
-brew install txn2/tap/txeh
-```
+<div class="grid cards" markdown>
+
+-   :material-lock-outline:{ .lg .middle } **Thread-Safe**
+
+    ---
+
+    All public methods use mutex locking for safe concurrent access from multiple goroutines.
+
+-   :material-ip-network:{ .lg .middle } **IPv4 & IPv6**
+
+    ---
+
+    Full support for both address families with family-specific lookups.
+
+-   :material-select-group:{ .lg .middle } **CIDR Operations**
+
+    ---
+
+    Bulk add and remove hosts by CIDR range. List all entries in a network.
+
+-   :material-monitor:{ .lg .middle } **Cross-Platform**
+
+    ---
+
+    Linux, macOS, and Windows. Auto-detects the system hosts file location.
 
 </div>
 
-<div class="home-footer" markdown>
+## Quick Install
+
+=== "Homebrew"
+
+    ```bash
+    brew install txn2/tap/txeh
+    ```
+
+=== "Go Install"
+
+    ```bash
+    go install github.com/txn2/txeh/txeh@latest
+    ```
+
+=== "Go Library"
+
+    ```bash
+    go get github.com/txn2/txeh
+    ```
+
+---
 
 [![CI](https://github.com/txn2/txeh/actions/workflows/ci.yml/badge.svg)](https://github.com/txn2/txeh/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/txn2/txeh/branch/master/graph/badge.svg)](https://codecov.io/gh/txn2/txeh)
 [![Go Report Card](https://goreportcard.com/badge/github.com/txn2/txeh)](https://goreportcard.com/report/github.com/txn2/txeh)
 [![Go Reference](https://pkg.go.dev/badge/github.com/txn2/txeh.svg)](https://pkg.go.dev/github.com/txn2/txeh)
-
-Apache 2.0 Licensed. Built by [Craig Johnston](https://github.com/cjimti).
-
-</div>
