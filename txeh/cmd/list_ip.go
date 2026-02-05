@@ -8,14 +8,14 @@ import (
 )
 
 func init() {
-	listCmd.AddCommand(listByIpCmd)
+	listCmd.AddCommand(listByIPCmd)
 }
 
-var listByIpCmd = &cobra.Command{
+var listByIPCmd = &cobra.Command{
 	Use:   "ip [IP] [IP] [IP]...",
 	Short: "List hosts for one or more IP addresses",
 	Long:  `List hosts for one or more IP addresses from /etc/hosts`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		if len(args) < 1 {
 			return errors.New("the \"list ip\" command requires at least one IP address")
 		}
@@ -26,11 +26,12 @@ var listByIpCmd = &cobra.Command{
 
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ListByIPs(args)
 	},
 }
 
+// ListByIPs lists hostnames for the given IP addresses.
 func ListByIPs(ips []string) {
 	for _, ip := range ips {
 		hosts := etcHosts.ListHostsByIP(ip)
