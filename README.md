@@ -10,6 +10,8 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/txn2/txeh/badge)](https://securityscorecards.dev/viewer/?uri=github.com/txn2/txeh)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
+**[Documentation](https://txeh.txn2.com)** | **[Go Reference](https://pkg.go.dev/github.com/txn2/txeh)** | **[Releases](https://github.com/txn2/txeh/releases)**
+
 ### /etc/hosts Management
 
 It is easy to open your [/etc/hosts] file in text editor and add or remove entries. However, if you make heavy use of [/etc/hosts] for software development or DevOps purposes, it can sometimes be difficult to automate and validate large numbers of host entries.
