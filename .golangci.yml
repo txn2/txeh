@@ -1,0 +1,73 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Bug detection
+    - errcheck          # Check error returns
+    - govet             # Go vet checks
+    - staticcheck       # Static analysis
+    - ineffassign       # Detect ineffective assignments
+    - unused            # Find unused code
+    - bodyclose         # Check HTTP body close
+    - noctx             # Check context usage in HTTP
+
+    # Code style
+    - misspell          # Spelling mistakes
+    - unconvert         # Unnecessary conversions
+    - whitespace        # Whitespace issues
+
+    # Code quality
+    - gocritic          # Comprehensive checks
+    - gocyclo           # Cyclomatic complexity
+    - nakedret          # Naked returns
+    - prealloc          # Slice preallocation
+    - predeclared       # Shadowing predeclared
+
+    # Security (gosec runs separately in CI for better control)
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+
+  misspell:
+    locale: US
+
+  nakedret:
+    max-func-lines: 30
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    goimports:
+      local-prefixes: github.com/txn2/txeh
+
+issues:
+  exclude-rules:
+    # Relax rules for tests
+    - path: _test\.go
+      linters:
+        - errcheck
+        - misspell
+
+    # Allow long lines in generated files
+    - path: generated
+      linters:
+        - lll
+
+  max-issues-per-linter: 50
+  max-same-issues: 10
