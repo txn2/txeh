@@ -1,0 +1,15 @@
+# Default owners for everything in the repo
+* @cjimti
+
+# Core library
+/txeh.go @cjimti
+/txeh_test.go @cjimti
+
+# CI/CD and release configuration
+/.github/ @cjimti
+/.goreleaser.yml @cjimti
+/GNUmakefile @cjimti
+
+# Security-sensitive files
+/SECURITY.md @cjimti
+/.pre-commit-config.yaml @cjimti
