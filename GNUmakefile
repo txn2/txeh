@@ -49,13 +49,7 @@ test-integration:
 
 .PHONY: test-e2e
 test-e2e:
-	@if [ -f test/e2e/docker-compose.yml ]; then \
-		docker compose -f test/e2e/docker-compose.yml up -d; \
-		go test -race -v -tags=e2e ./test/e2e/...; \
-		docker compose -f test/e2e/docker-compose.yml down; \
-	else \
-		echo "No E2E tests configured (test/e2e/docker-compose.yml not found)"; \
-	fi
+	go test -race -v -tags=e2e ./test/e2e/...
 
 .PHONY: lint
 lint:
@@ -114,6 +108,16 @@ all: verify build
 clean:
 	rm -f coverage.out coverage.html
 	go clean -cache
+
+.PHONY: docs
+docs:
+	pip install -r requirements-docs.txt
+	mkdocs serve
+
+.PHONY: docs-build
+docs-build:
+	pip install -r requirements-docs.txt
+	mkdocs build --strict
 
 .PHONY: check
 check:
