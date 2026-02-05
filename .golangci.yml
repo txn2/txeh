@@ -39,38 +39,58 @@ linters:
     - errname            # Error naming conventions
     - errorlint          # Error wrapping issues
 
-    # ===== Security (runs separately in CI for detailed output) =====
-    # - gosec
+  settings:
+    gocyclo:
+      min-complexity: 15
 
-linters-settings:
-  gocyclo:
-    min-complexity: 15
+    gocognit:
+      min-complexity: 20
 
-  gocognit:
-    min-complexity: 20
+    misspell:
+      locale: US
 
-  misspell:
-    locale: US
+    nakedret:
+      max-func-lines: 30
 
-  nakedret:
-    max-func-lines: 30
+    nestif:
+      min-complexity: 6
 
-  nestif:
-    min-complexity: 6
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-    disabled-checks:
-      - hugeParam
-      - rangeValCopy
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
 
-  errorlint:
-    errorf: true
-    errorf-multi: true
-    asserts: true
-    comparison: true
+  exclusions:
+    warn-unused: true
+    rules:
+      # Relax rules for tests
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gocritic
+          - gocognit
+          - gocyclo
+          - unparam
+
+      # Allow longer functions in cmd/
+      - path: cmd/
+        linters:
+          - gocyclo
+          - gocognit
+
+      # Generated files
+      - path: generated
+        linters:
+          - all
 
 formatters:
   enable:
@@ -79,29 +99,9 @@ formatters:
 
   settings:
     goimports:
-      local-prefixes: github.com/txn2/txeh
+      local-prefixes:
+        - github.com/txn2/txeh
 
 issues:
-  exclude-rules:
-    # Relax rules for tests
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gocritic
-        - gocognit
-        - gocyclo
-        - unparam
-
-    # Allow longer functions in cmd/
-    - path: cmd/
-      linters:
-        - gocyclo
-        - gocognit
-
-    # Generated files
-    - path: generated
-      linters:
-        - all
-
   max-issues-per-linter: 50
   max-same-issues: 10
