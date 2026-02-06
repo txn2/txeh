@@ -1,6 +1,80 @@
-# Commands Reference
+# CLI Reference
 
-## add
+txeh provides a command-line interface for managing `/etc/hosts` file entries.
+
+## Installation
+
+=== "Homebrew (macOS/Linux)"
+
+    ```bash
+    brew install txn2/tap/txeh
+    ```
+
+=== "Go Install"
+
+    Requires Go 1.24 or later.
+
+    ```bash
+    go install github.com/txn2/txeh/txeh@latest
+    ```
+
+    The binary is installed to `$GOPATH/bin`. Ensure this directory is in your `$PATH`.
+
+=== "Binary Download"
+
+    Pre-built binaries are available on the [GitHub Releases](https://github.com/txn2/txeh/releases) page:
+
+    | OS | Architectures |
+    |----|---------------|
+    | Linux | amd64, arm64, arm, 386 |
+    | macOS | amd64 (Intel), arm64 (Apple Silicon) |
+    | Windows | amd64, 386 |
+
+    `.deb`, `.rpm`, and `.apk` packages are also available for each release.
+
+=== "Build from Source"
+
+    ```bash
+    git clone https://github.com/txn2/txeh.git
+    cd txeh
+    go install ./txeh
+    ```
+
+Verify installation:
+
+```bash
+txeh version
+```
+
+## Quick Start
+
+```bash
+# Add a hostname
+sudo txeh add 127.0.0.1 myapp.local
+
+# List hosts for an IP
+txeh list ip 127.0.0.1
+
+# Remove a hostname
+sudo txeh remove host myapp.local
+
+# Preview changes without saving
+sudo txeh add 127.0.0.1 myapp.local --dryrun
+```
+
+## Global Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--dryrun` | `-d` | Output to stdout without saving |
+| `--quiet` | `-q` | Suppress output |
+| `--read` | `-r` | Override path to read hosts file |
+| `--write` | `-w` | Override path to write hosts file |
+| `--max-hosts-per-line` | `-m` | Max hostnames per line (0=auto, -1=unlimited) |
+
+## Commands
+
+### add
 
 Add one or more hostnames to an IP address.
 
@@ -30,7 +104,7 @@ sudo txeh add 127.0.0.1 myapp.local --comment "dev environment"
 sudo txeh add 127.0.0.1 myapp.local --dryrun
 ```
 
-## remove host
+### remove host
 
 Remove one or more hostnames from the hosts file.
 
@@ -38,14 +112,12 @@ Remove one or more hostnames from the hosts file.
 sudo txeh remove host [HOSTNAME] [HOSTNAME]...
 ```
 
-**Examples:**
-
 ```bash
 sudo txeh remove host myapp.local
 sudo txeh remove host app1.local app2.local
 ```
 
-## remove ip
+### remove ip
 
 Remove an IP address and all hostnames associated with it.
 
@@ -53,14 +125,12 @@ Remove an IP address and all hostnames associated with it.
 sudo txeh remove ip [IP] [IP]...
 ```
 
-**Examples:**
-
 ```bash
 sudo txeh remove ip 127.0.0.1
 sudo txeh remove ip 10.0.0.1 10.0.0.2
 ```
 
-## remove cidr
+### remove cidr
 
 Remove all addresses within one or more CIDR ranges.
 
@@ -68,14 +138,15 @@ Remove all addresses within one or more CIDR ranges.
 sudo txeh remove cidr [CIDR] [CIDR]...
 ```
 
-**Examples:**
-
 ```bash
 sudo txeh remove cidr 10.0.0.0/24
 sudo txeh remove cidr 192.168.1.0/24 172.16.0.0/12
+
+# Preview with dry run
+sudo txeh remove cidr 10.0.0.0/8 --dryrun
 ```
 
-## remove bycomment
+### remove bycomment
 
 Remove all host entries that have a specific inline comment.
 
@@ -83,14 +154,12 @@ Remove all host entries that have a specific inline comment.
 sudo txeh remove bycomment [COMMENT]
 ```
 
-**Examples:**
-
 ```bash
 sudo txeh remove bycomment "dev environment"
 sudo txeh remove bycomment "kubefwd"
 ```
 
-## list ip
+### list ip
 
 List hostnames associated with one or more IP addresses.
 
@@ -98,7 +167,7 @@ List hostnames associated with one or more IP addresses.
 txeh list ip [IP] [IP]...
 ```
 
-## list cidr
+### list cidr
 
 List hostnames for all addresses within CIDR ranges.
 
@@ -106,7 +175,7 @@ List hostnames for all addresses within CIDR ranges.
 txeh list cidr [CIDR] [CIDR]...
 ```
 
-## list host
+### list host
 
 List IP addresses associated with one or more hostnames.
 
@@ -114,7 +183,7 @@ List IP addresses associated with one or more hostnames.
 txeh list host [HOSTNAME] [HOSTNAME]...
 ```
 
-## list bycomment
+### list bycomment
 
 List all hosts that have a specific inline comment.
 
@@ -122,7 +191,7 @@ List all hosts that have a specific inline comment.
 txeh list bycomment [COMMENT]
 ```
 
-## show
+### show
 
 Display the full rendered hosts file.
 
@@ -130,7 +199,7 @@ Display the full rendered hosts file.
 txeh show
 ```
 
-## version
+### version
 
 Print the txeh version.
 
