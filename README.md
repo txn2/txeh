@@ -300,4 +300,8 @@ GITHUB_TOKEN=$GITHUB_TOKEN goreleaser --clean
 
 Apache License 2.0
 
+---
+
+Open source by [Craig Johnston](https://twitter.com/cjimti), sponsored by [Deasil Works, Inc.](https://deasil.works/)
+
 [/etc/hosts]:https://en.wikipedia.org/wiki/Hosts_(file)
