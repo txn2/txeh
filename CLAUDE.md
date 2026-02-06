@@ -18,17 +18,17 @@ txeh is a Go library and CLI utility for managing /etc/hosts file entries. It pr
 
 ```bash
 # Full verification (run before every commit)
-make verify
+make verify          # fmt, lint, test-unit, security, go mod verify
 
-# Run all tests including integration
-make verify-full
+# Extended verification
+make verify-full     # fmt, lint, test, security, go mod verify
 
 # Format, lint, test individually
-make fmt
-make lint
-make test-unit
-make coverage
-make security
+make fmt             # gofmt + goimports
+make lint            # golangci-lint
+make test-unit       # go test -race ./...
+make coverage        # Coverage report (HTML + summary)
+make security        # gosec + govulncheck
 ```
 
 ## Architecture
@@ -141,22 +141,34 @@ entries := hosts.ListHostsByComment("myapp")
 
 ```bash
 # Development
-make build          # Build CLI binary
-make test-unit      # Run unit tests
-make lint           # Run linter
-make fmt            # Format code
+make build          # Build CLI binary to txeh/dist/
+make test-unit      # Run unit tests with race detection
+make lint           # Run golangci-lint
+make lint-fix       # Run golangci-lint with auto-fix
+make fmt            # Format code (gofmt + goimports)
 
 # Before committing
-make verify         # Format, lint, test, security scan
+make verify         # fmt, lint, test-unit, security, go mod verify
 
-# Full CI verification
-make verify-full    # Includes integration tests
+# Extended verification
+make verify-full    # fmt, lint, test, security, go mod verify
+
+# Testing
+make test-integration  # Integration tests (tagged)
+make test-e2e          # E2E tests (tagged, requires Docker)
+make coverage          # Generate coverage report (HTML + summary)
+
+# Code quality
+make security       # gosec + govulncheck
+make dead-code      # Check for unreachable code (deadcode)
+make check          # go vet + staticcheck + golangci-lint
+make mutate         # Mutation testing (gremlins, threshold 60%)
 
 # Debugging
 go test -v -run TestSpecific ./...  # Run specific test
 
-# Build release
-goreleaser --skip-publish --clean --skip-validate
+# Build release (goreleaser v2)
+goreleaser release --snapshot --clean
 ```
 
 ## File Naming Conventions
@@ -165,6 +177,9 @@ goreleaser --skip-publish --clean --skip-validate
 |---------|---------|
 | `*_test.go` | Test files (same package) |
 | `txeh/cmd/*.go` | CLI command implementations |
+| `test/integration/` | Integration tests (`-tags=integration`) |
+| `test/e2e/` | End-to-end tests (`-tags=e2e`) |
+| `GNUmakefile` | Build automation (use `make`) |
 
 ## Git Commit Guidelines
 
