@@ -58,7 +58,7 @@ After adding entries, if the hostname doesn't resolve:
     txeh show
     ```
 
-3. **Check for conflicting entries** -- Multiple entries for the same hostname may cause unexpected behavior.
+3. **Check for conflicting entries.** Multiple entries for the same hostname may cause unexpected behavior.
 
 ### Windows hosts file location
 
@@ -72,5 +72,5 @@ If your Windows installation uses a non-standard path, set `SystemRoot` or use t
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/txn2/txeh/issues) -- Bug reports and feature requests
-- [GitHub Discussions](https://github.com/txn2/txeh/discussions) -- Questions and community support
+- [GitHub Issues](https://github.com/txn2/txeh/issues): Bug reports and feature requests.
+- [GitHub Discussions](https://github.com/txn2/txeh/discussions): Questions and community support.

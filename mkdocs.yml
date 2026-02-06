@@ -11,7 +11,7 @@ copyright: Copyright &copy; 2018 - 2026 Craig Johnston / Deasil Works, Inc.
 theme:
   name: material
   custom_dir: docs/overrides
-  logo: images/logo.png
+  logo: images/txn2-logo.png
   favicon: images/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -35,10 +35,9 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.expand
     - navigation.top
     - navigation.footer
+    - toc.integrate
     - search.suggest
     - search.highlight
     - search.share
@@ -52,23 +51,10 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - CLI:
-    - Overview: cli/index.md
-    - Installation: cli/installation.md
-    - Commands: cli/commands.md
-  - Go Library:
-    - Overview: library/index.md
-    - Quick Start: library/quickstart.md
-    - API Reference: library/api.md
-  - Guides:
-    - Comments: guides/comments.md
-    - CIDR Operations: guides/cidr.md
-  - Reference:
-    - Architecture: reference/architecture.md
-    - Configuration: reference/configuration.md
-  - Support:
-    - Troubleshooting: support/troubleshooting.md
-    - Changelog: support/changelog.md
+  - CLI Reference: cli.md
+  - Go Library: library.md
+  - API Reference: api.md
+  - Troubleshooting: troubleshooting.md
 
 extra:
   social:

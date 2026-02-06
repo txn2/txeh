@@ -28,6 +28,16 @@ type HostsConfig struct {
 
 The main struct for hosts file operations. All methods are thread-safe.
 
+```go
+type Hosts struct {
+    sync.Mutex
+    Path          string
+    ReadFilePath  string
+    WriteFilePath string
+    hostFileLines HostFileLines
+}
+```
+
 ### HostFileLine
 
 Represents a single line in the hosts file.
@@ -35,33 +45,48 @@ Represents a single line in the hosts file.
 ```go
 type HostFileLine struct {
     OriginalLineNum int
-    LineType         int
-    Address          string
-    Parts            []string
-    Hostnames        []string
-    Raw              string
-    Trimed           string
-    Comment          string
+    LineType        int
+    Address         string
+    Parts           []string
+    Hostnames       []string
+    Raw             string
+    Trimmed         string
+    Comment         string
 }
 ```
+
+Line types:
+
+| Type | Value | Description |
+|------|-------|-------------|
+| `UNKNOWN` | 0 | Unrecognized line |
+| `EMPTY` | 10 | Empty/whitespace line |
+| `COMMENT` | 20 | Comment line (`# ...`) |
+| `ADDRESS` | 30 | Host entry (`IP hostname [hostname...]`) |
 
 ### IPFamily
 
 ```go
-type IPFamily int
+type IPFamily int64
 
 const (
-    IPFamilyV4 IPFamily = 4
-    IPFamilyV6 IPFamily = 6
+    IPFamilyV4 IPFamily = iota // 0
+    IPFamilyV6                 // 1
 )
+```
+
+### HostFileLines
+
+```go
+type HostFileLines []HostFileLine
 ```
 
 ## Constructors
 
 | Function | Description |
 |----------|-------------|
-| `NewHostsDefault()` | Load from system default hosts file |
-| `NewHosts(config)` | Load with custom configuration |
+| `NewHostsDefault() (*Hosts, error)` | Load from system default hosts file |
+| `NewHosts(config *HostsConfig) (*Hosts, error)` | Load with custom configuration |
 
 ## Methods
 
@@ -92,8 +117,8 @@ const (
 |--------|---------|-------------|
 | `ListHostsByIP(ip)` | `[]string` | Hostnames at an IP |
 | `ListAddressesByHost(host, exact)` | `[][]string` | IPs for a hostname |
-| `ListHostsByCIDR(cidr)` | `[]string` | Hostnames in a CIDR range |
-| `HostAddressLookup(host, family)` | `bool, string, IPFamily` | Lookup a hostname |
+| `ListHostsByCIDR(cidr)` | `[][]string` | IPs and hostnames in a CIDR range |
+| `HostAddressLookup(host, family)` | `(bool, string, int)` | Lookup a hostname |
 | `ListHostsByComment(comment)` | `[]string` | Hostnames with a comment |
 
 ### Output
@@ -101,6 +126,6 @@ const (
 | Method | Description |
 |--------|-------------|
 | `RenderHostsFile() string` | Render the hosts file as a string |
-| `GetHostFileLines() *HostFileLines` | Get parsed line data |
+| `GetHostFileLines() HostFileLines` | Get a copy of all parsed host file lines |
 | `Save() error` | Save to the configured write path |
 | `SaveAs(path) error` | Save to a specific path |
