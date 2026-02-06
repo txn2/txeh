@@ -150,7 +150,8 @@ func (h *Hosts) SaveAs(fileName string) error {
 	return nil
 }
 
-// Reload hosts file
+// Reload re-reads the hosts file from disk and replaces the in-memory state.
+// This is part of the public API for consumers who manage long-lived Hosts instances.
 func (h *Hosts) Reload() error {
 	if h.RawText != nil {
 		return errors.New("cannot call Reload with RawText")
@@ -272,6 +273,7 @@ func (h *Hosts) RemoveFirstHost(host string) bool {
 
 // RemoveByComments removes all host entries that have any of the specified comments.
 // This removes entire lines where the comment matches.
+// This is part of the public API for bulk comment-based cleanup (e.g., kubefwd teardown).
 func (h *Hosts) RemoveByComments(comments []string) {
 	for _, comment := range comments {
 		h.RemoveByComment(comment)
@@ -463,8 +465,9 @@ func (h *Hosts) ListHostsByComment(comment string) []string {
 	return hosts
 }
 
-// HostAddressLookup returns true if the host is found, a string
-// containing the address and the index of the hfl
+// HostAddressLookup returns true if the host is found, the address string,
+// and the index of the host file line. This is part of the public API for
+// consumers that need direct address lookups by IP family.
 func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string, int) {
 	h.Lock()
 	defer h.Unlock()
