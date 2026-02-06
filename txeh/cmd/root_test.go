@@ -1065,6 +1065,165 @@ func TestListByComment_EmptyComment(t *testing.T) {
 	}
 }
 
+// --- DryRun Tests for Remove IP ---
+
+func TestRemoveIPs_DryRun(t *testing.T) {
+	path, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server\n")
+	defer cleanup()
+
+	DryRun = true
+
+	output := captureOutput(func() {
+		removeIPs([]string{"192.168.1.1"})
+	})
+
+	// Output should NOT contain server (it's removed in dry run view)
+	if strings.Contains(output, "server") {
+		t.Error("Dry run output should show server removed")
+	}
+
+	// File should still have it
+	content, _ := os.ReadFile(path)
+	if !strings.Contains(string(content), "server") {
+		t.Error("Dry run should not modify the file")
+	}
+}
+
+// --- DryRun Tests for Remove CIDR ---
+
+func TestRemoveIPRanges_DryRun(t *testing.T) {
+	path, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server1\n192.168.1.2 server2\n")
+	defer cleanup()
+
+	DryRun = true
+
+	output := captureOutput(func() {
+		RemoveIPRanges([]string{"192.168.1.0/24"})
+	})
+
+	// Output should NOT contain server1/server2
+	if strings.Contains(output, "server1") || strings.Contains(output, "server2") {
+		t.Error("Dry run output should show servers removed")
+	}
+	// Output should contain localhost
+	if !strings.Contains(output, "localhost") {
+		t.Error("Dry run output should still contain localhost")
+	}
+
+	// File should still have the original content
+	content, _ := os.ReadFile(path)
+	if !strings.Contains(string(content), "server1") {
+		t.Error("Dry run should not modify the file")
+	}
+}
+
+// --- DryRun Tests for Remove By Comment ---
+
+func TestRemoveByComment_DryRun(t *testing.T) {
+	path, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n127.0.0.1 app1 app2 # dev services\n")
+	defer cleanup()
+
+	DryRun = true
+
+	output := captureOutput(func() {
+		RemoveByComment("dev services")
+	})
+
+	// Output should NOT contain the dev services hosts
+	if strings.Contains(output, "app1") || strings.Contains(output, "app2") {
+		t.Error("Dry run output should show dev services hosts removed")
+	}
+	// Output should still contain localhost
+	if !strings.Contains(output, "localhost") {
+		t.Error("Dry run output should still contain localhost")
+	}
+
+	// File should still have original content
+	content, _ := os.ReadFile(path)
+	if !strings.Contains(string(content), "app1") {
+		t.Error("Dry run should not modify the file")
+	}
+}
+
+// --- VersionFromBuild Tests ---
+
+func TestVersionFromBuild_GoreleaserVersion(t *testing.T) {
+	// Save and restore original version
+	origVersion := Version
+	defer func() { Version = origVersion }()
+
+	Version = "1.2.3"
+	result := VersionFromBuild()
+	if result != "1.2.3" {
+		t.Errorf("Expected '1.2.3', got %q", result)
+	}
+}
+
+func TestVersionFromBuild_Default(t *testing.T) {
+	// Save and restore original version
+	origVersion := Version
+	defer func() { Version = origVersion }()
+
+	Version = "0.0.0"
+	result := VersionFromBuild()
+	// In test context, debug.ReadBuildInfo() returns info from go test
+	if result == "" {
+		t.Error("Expected non-empty version from build info")
+	}
+}
+
+// --- initEtcHosts Default Path ---
+
+func TestInitEtcHosts_DefaultPath(t *testing.T) {
+	// Save original values
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	// Empty paths and zero max triggers the default path
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 0
+
+	initEtcHosts()
+
+	if etcHosts == nil {
+		t.Error("etcHosts should be initialized via default path")
+	}
+}
+
+func TestInitEtcHosts_EmptyPathsNonZeroMax(t *testing.T) {
+	// Save original values
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	// Empty paths but non-zero max should take the NewHosts path
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 5
+
+	initEtcHosts()
+
+	if etcHosts == nil {
+		t.Error("etcHosts should be initialized via NewHosts path")
+	}
+}
+
 func TestMaxHostsPerLine_Flag(t *testing.T) {
 	hostsContent := `127.0.0.1        localhost
 `
@@ -1127,5 +1286,402 @@ func TestMaxHostsPerLine_Flag(t *testing.T) {
 	// Then h2 h3, h4 h5 = total 3 lines
 	if addressLines < 3 {
 		t.Errorf("Expected at least 3 lines with max 2 hosts per line, got %d", addressLines)
+	}
+}
+
+// =============================================================================
+// Cobra Command Args Validation Tests
+// =============================================================================
+
+func TestAddCmd_Args_Valid(t *testing.T) {
+	err := addCmd.Args(addCmd, []string{"127.0.0.1", "myhost"})
+	if err != nil {
+		t.Errorf("Expected no error for valid args, got: %v", err)
+	}
+}
+
+func TestAddCmd_Args_TooFew(t *testing.T) {
+	err := addCmd.Args(addCmd, []string{"127.0.0.1"})
+	if err == nil {
+		t.Error("Expected error for missing hostname")
+	}
+}
+
+func TestAddCmd_Args_InvalidIP(t *testing.T) {
+	err := addCmd.Args(addCmd, []string{"not-an-ip", "myhost"})
+	if err == nil {
+		t.Error("Expected error for invalid IP")
+	}
+}
+
+func TestAddCmd_Args_InvalidHostname(t *testing.T) {
+	err := addCmd.Args(addCmd, []string{"127.0.0.1", "..."})
+	if err == nil {
+		t.Error("Expected error for invalid hostname")
+	}
+}
+
+func TestRemoveHostCmd_Args_Valid(t *testing.T) {
+	err := removeHostCmd.Args(removeHostCmd, []string{"myhost"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestRemoveHostCmd_Args_Empty(t *testing.T) {
+	err := removeHostCmd.Args(removeHostCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestRemoveHostCmd_Args_InvalidHostname(t *testing.T) {
+	err := removeHostCmd.Args(removeHostCmd, []string{"..."})
+	if err == nil {
+		t.Error("Expected error for invalid hostname")
+	}
+}
+
+func TestRemoveIPCmd_Args_Valid(t *testing.T) {
+	err := removeIPCmd.Args(removeIPCmd, []string{"127.0.0.1"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestRemoveIPCmd_Args_Empty(t *testing.T) {
+	err := removeIPCmd.Args(removeIPCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestRemoveIPCmd_Args_InvalidIP(t *testing.T) {
+	err := removeIPCmd.Args(removeIPCmd, []string{"not-an-ip"})
+	if err == nil {
+		t.Error("Expected error for invalid IP")
+	}
+}
+
+func TestRemoveCidrCmd_Args_Valid(t *testing.T) {
+	err := removeCidrCmd.Args(removeCidrCmd, []string{"192.168.1.0/24"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestRemoveCidrCmd_Args_Empty(t *testing.T) {
+	err := removeCidrCmd.Args(removeCidrCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestRemoveCidrCmd_Args_InvalidCIDR(t *testing.T) {
+	err := removeCidrCmd.Args(removeCidrCmd, []string{"not-a-cidr"})
+	if err == nil {
+		t.Error("Expected error for invalid CIDR")
+	}
+}
+
+func TestRemoveCommentCmd_Args_Valid(t *testing.T) {
+	err := removeCommentCmd.Args(removeCommentCmd, []string{"my comment"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestRemoveCommentCmd_Args_Empty(t *testing.T) {
+	err := removeCommentCmd.Args(removeCommentCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestListByHostsCmd_Args_Valid(t *testing.T) {
+	err := listByHostsCmd.Args(listByHostsCmd, []string{"myhost"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestListByHostsCmd_Args_Empty(t *testing.T) {
+	err := listByHostsCmd.Args(listByHostsCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestListByHostsCmd_Args_InvalidHostname(t *testing.T) {
+	err := listByHostsCmd.Args(listByHostsCmd, []string{"..."})
+	if err == nil {
+		t.Error("Expected error for invalid hostname")
+	}
+}
+
+func TestListByIPCmd_Args_Valid(t *testing.T) {
+	err := listByIPCmd.Args(listByIPCmd, []string{"127.0.0.1"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestListByIPCmd_Args_Empty(t *testing.T) {
+	err := listByIPCmd.Args(listByIPCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestListByIPCmd_Args_InvalidIP(t *testing.T) {
+	err := listByIPCmd.Args(listByIPCmd, []string{"not-an-ip"})
+	if err == nil {
+		t.Error("Expected error for invalid IP")
+	}
+}
+
+func TestListByCidrCmd_Args_Valid(t *testing.T) {
+	err := listByCidrCmd.Args(listByCidrCmd, []string{"10.0.0.0/8"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestListByCidrCmd_Args_Empty(t *testing.T) {
+	err := listByCidrCmd.Args(listByCidrCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestListByCidrCmd_Args_InvalidCIDR(t *testing.T) {
+	err := listByCidrCmd.Args(listByCidrCmd, []string{"not-a-cidr"})
+	if err == nil {
+		t.Error("Expected error for invalid CIDR")
+	}
+}
+
+func TestListByCommentCmd_Args_Valid(t *testing.T) {
+	err := listByCommentCmd.Args(listByCommentCmd, []string{"my comment"})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+func TestListByCommentCmd_Args_Empty(t *testing.T) {
+	err := listByCommentCmd.Args(listByCommentCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for empty args")
+	}
+}
+
+func TestShowCmd_Args(t *testing.T) {
+	// show command accepts any args (no validation)
+	err := showCmd.Args(showCmd, []string{})
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+}
+
+// =============================================================================
+// Cobra Command Run Function Tests
+// =============================================================================
+
+func TestAddCmd_Run_Basic(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	addComment = ""
+	Quiet = true
+
+	addCmd.Run(addCmd, []string{"192.168.1.1", "newhost"})
+
+	result := etcHosts.ListHostsByIP("192.168.1.1")
+	if len(result) != 1 || result[0] != "newhost" {
+		t.Errorf("Expected 'newhost', got: %v", result)
+	}
+}
+
+func TestAddCmd_Run_WithComment(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "")
+	defer cleanup()
+
+	addComment = "my-app"
+	Quiet = true
+
+	addCmd.Run(addCmd, []string{"192.168.1.1", "svc1", "svc2"})
+
+	rendered := etcHosts.RenderHostsFile()
+	if !strings.Contains(rendered, "my-app") {
+		t.Error("Comment should appear in rendered output")
+	}
+	addComment = ""
+}
+
+func TestAddCmd_Run_NotQuiet(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	addComment = ""
+	Quiet = false
+
+	output := captureOutput(func() {
+		addCmd.Run(addCmd, []string{"192.168.1.1", "newhost"})
+	})
+
+	if !strings.Contains(output, "Adding host") {
+		t.Errorf("Expected 'Adding host' output, got: %s", output)
+	}
+}
+
+func TestAddCmd_Run_NotQuiet_WithComment(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	addComment = "test-comment"
+	Quiet = false
+
+	output := captureOutput(func() {
+		addCmd.Run(addCmd, []string{"192.168.1.1", "newhost"})
+	})
+
+	if !strings.Contains(output, "test-comment") {
+		t.Errorf("Expected comment in output, got: %s", output)
+	}
+	addComment = ""
+}
+
+func TestRemoveHostCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost myhost\n")
+	defer cleanup()
+
+	Quiet = false
+
+	output := captureOutput(func() {
+		removeHostCmd.Run(removeHostCmd, []string{"myhost"})
+	})
+
+	if !strings.Contains(output, "Removing host") {
+		t.Errorf("Expected 'Removing host' output, got: %s", output)
+	}
+}
+
+func TestRemoveIPCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server\n")
+	defer cleanup()
+
+	Quiet = false
+
+	output := captureOutput(func() {
+		removeIPCmd.Run(removeIPCmd, []string{"192.168.1.1"})
+	})
+
+	if !strings.Contains(output, "Removing ip") {
+		t.Errorf("Expected 'Removing ip' output, got: %s", output)
+	}
+}
+
+func TestRemoveCidrCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n192.168.1.1 server\n")
+	defer cleanup()
+
+	Quiet = false
+
+	output := captureOutput(func() {
+		removeCidrCmd.Run(removeCidrCmd, []string{"192.168.1.0/24"})
+	})
+
+	if !strings.Contains(output, "Removing ip ranges") {
+		t.Errorf("Expected 'Removing ip ranges' output, got: %s", output)
+	}
+}
+
+func TestRemoveCommentCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 app1 # dev services\n")
+	defer cleanup()
+
+	Quiet = false
+
+	output := captureOutput(func() {
+		removeCommentCmd.Run(removeCommentCmd, []string{"dev services"})
+	})
+
+	if !strings.Contains(output, "Removing all hosts with comment") {
+		t.Errorf("Expected removal message, got: %s", output)
+	}
+}
+
+func TestListByHostsCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "192.168.1.1 myserver\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		listByHostsCmd.Run(listByHostsCmd, []string{"myserver"})
+	})
+
+	if !strings.Contains(output, "192.168.1.1") {
+		t.Errorf("Expected IP in output, got: %s", output)
+	}
+}
+
+func TestListByIPCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "192.168.1.1 myserver\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		listByIPCmd.Run(listByIPCmd, []string{"192.168.1.1"})
+	})
+
+	if !strings.Contains(output, "myserver") {
+		t.Errorf("Expected hostname in output, got: %s", output)
+	}
+}
+
+func TestListByCidrCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "192.168.1.1 myserver\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		listByCidrCmd.Run(listByCidrCmd, []string{"192.168.1.0/24"})
+	})
+
+	if !strings.Contains(output, "192.168.1.1") {
+		t.Errorf("Expected IP in output, got: %s", output)
+	}
+}
+
+func TestListByCommentCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 app1 # dev services\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		listByCommentCmd.Run(listByCommentCmd, []string{"dev services"})
+	})
+
+	if !strings.Contains(output, "app1") {
+		t.Errorf("Expected 'app1' in output, got: %s", output)
+	}
+}
+
+func TestShowCmd_Run(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n# test comment\n")
+	defer cleanup()
+
+	output := captureOutput(func() {
+		showCmd.Run(showCmd, []string{})
+	})
+
+	if !strings.Contains(output, "localhost") {
+		t.Errorf("Expected 'localhost' in output, got: %s", output)
+	}
+}
+
+func TestVersionCmd_Run(t *testing.T) {
+	output := captureOutput(func() {
+		versionCmd.Run(versionCmd, []string{})
+	})
+
+	if !strings.Contains(output, "txeh Version:") {
+		t.Errorf("Expected version output, got: %s", output)
 	}
 }
