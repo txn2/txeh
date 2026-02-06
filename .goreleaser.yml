@@ -57,17 +57,14 @@ checksum:
 
 signs:
   - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: '${artifact}.pem'
     args:
       - sign-blob
-      - '--output-certificate=${certificate}'
-      - '--output-signature=${signature}'
+      - '--bundle=${signature}'
       - '${artifact}'
       - '--yes'
     artifacts: checksum
     output: true
+    signature: '${artifact}.bundle'
 
 sboms:
   - artifacts: archive
