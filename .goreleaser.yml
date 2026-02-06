@@ -116,6 +116,7 @@ brews:
     repository:
       owner: txn2
       name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
     commit_author:
       name: Craig Johnston
       email: cj@imti.co
