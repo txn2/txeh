@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -40,15 +39,5 @@ var removeHostCmd = &cobra.Command{
 // RemoveHosts removes the given hostnames from the hosts file.
 func RemoveHosts(hosts []string) {
 	etcHosts.RemoveHosts(hosts)
-
-	if DryRun {
-		fmt.Print(etcHosts.RenderHostsFile())
-		return
-	}
-
-	err := etcHosts.Save()
-	if err != nil {
-		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
-		os.Exit(1)
-	}
+	saveHosts()
 }

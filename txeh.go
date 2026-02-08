@@ -53,6 +53,9 @@ type HostsConfig struct {
 	//  -1  = force unlimited (no limit)
 	//  >0  = explicit limit
 	MaxHostsPerLine int
+	// AutoFlush triggers a DNS cache flush after every successful Save/SaveAs.
+	// Flush failures are returned as *FlushError, distinguishable via errors.As.
+	AutoFlush bool
 }
 
 // Hosts represents a parsed hosts file with thread-safe operations.
@@ -146,6 +149,12 @@ func (h *Hosts) SaveAs(fileName string) error {
 	err := os.WriteFile(filepath.Clean(fileName), hfData, 0o644) // #nosec G306 -- hosts file must be world-readable (0644) for DNS resolution
 	if err != nil {
 		return fmt.Errorf("write hosts file %s: %w", fileName, err)
+	}
+
+	if h.AutoFlush {
+		if flushErr := FlushDNSCache(); flushErr != nil {
+			return flushErr
+		}
 	}
 
 	return nil

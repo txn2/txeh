@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -340,6 +342,7 @@ func setupTestHosts(t *testing.T, content string) (path string, cleanup func()) 
 	HostsFileWritePath = tmpFile.Name()
 	DryRun = false
 	Quiet = true
+	Flush = false
 
 	// Initialize etcHosts
 	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
@@ -358,6 +361,7 @@ func setupTestHosts(t *testing.T, content string) (path string, cleanup func()) 
 		HostsFileWritePath = ""
 		DryRun = false
 		Quiet = false
+		Flush = false
 	}
 
 	return tmpFile.Name(), cleanup
@@ -1605,5 +1609,310 @@ func TestVersionCmd_Run(t *testing.T) {
 
 	if !strings.Contains(output, "txeh Version:") {
 		t.Errorf("Expected version output, got: %s", output)
+	}
+}
+
+// =============================================================================
+// Flush Integration Tests
+//
+// Acceptance criteria for the CLI flush feature, written as
+// Given/When/Then to verify concrete outputs.
+// =============================================================================
+
+// captureStderr redirects os.Stderr for the duration of f and returns
+// what was written.
+func captureStderr(f func()) string {
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
+	os.Stderr = w
+
+	f()
+
+	_ = w.Close()
+	os.Stderr = old
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+// Given DryRun=true and Flush=true
+// When AddHosts is called
+// Then stdout contains the rendered hosts file with the new host
+// And stdout does NOT contain "DNS cache flushed."
+// (DryRun prevents Save, which prevents flush.)
+func TestSaveHosts_DryRun_NoFlush(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	DryRun = true
+	Flush = true
+
+	output := captureOutput(func() {
+		AddHosts("192.168.1.1", []string{"newhost"}, "")
+	})
+
+	if !strings.Contains(output, "newhost") {
+		t.Error("dry run output should contain 'newhost'")
+	}
+	if strings.Contains(output, "DNS cache flushed") {
+		t.Error("dry run should not print flush message")
+	}
+}
+
+// Given Flush=true and Quiet=false with a successful save (using a temp file)
+// When saveHosts() runs
+// Then stdout contains exactly "DNS cache flushed.\n".
+func TestSaveHosts_FlushSuccess_PrintsMessage(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	// The library-level flush is triggered by AutoFlush on HostsConfig.
+	// We need AutoFlush=true for the exec mock to be exercised via Save().
+	// Re-initialize with AutoFlush=true and a mock that succeeds.
+	origFunc := txeh.ExecCommandFunc()
+	defer txeh.SetExecCommandFunc(origFunc)
+	txeh.SetExecCommandFunc(func(name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(context.Background(), "true") //nolint:gosec // test
+	})
+
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
+		ReadFilePath:  etcHosts.WriteFilePath,
+		WriteFilePath: etcHosts.WriteFilePath,
+		AutoFlush:     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	etcHosts = hosts
+	Flush = true
+	Quiet = false
+
+	etcHosts.AddHost("192.168.1.1", "flushtest")
+
+	output := captureOutput(func() {
+		saveHosts()
+	})
+
+	if !strings.Contains(output, "DNS cache flushed.") {
+		t.Errorf("expected 'DNS cache flushed.' in stdout, got: %q", output)
+	}
+}
+
+// Given Flush=true and Quiet=true with a successful save
+// When saveHosts() runs
+// Then stdout does NOT contain "DNS cache flushed.".
+func TestSaveHosts_FlushSuccess_Quiet_NoMessage(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	origFunc := txeh.ExecCommandFunc()
+	defer txeh.SetExecCommandFunc(origFunc)
+	txeh.SetExecCommandFunc(func(name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(context.Background(), "true") //nolint:gosec // test
+	})
+
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
+		ReadFilePath:  etcHosts.WriteFilePath,
+		WriteFilePath: etcHosts.WriteFilePath,
+		AutoFlush:     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	etcHosts = hosts
+	Flush = true
+	Quiet = true
+
+	etcHosts.AddHost("192.168.1.1", "flushtest")
+
+	output := captureOutput(func() {
+		saveHosts()
+	})
+
+	if strings.Contains(output, "DNS cache flushed") {
+		t.Errorf("quiet mode should suppress flush message, got: %q", output)
+	}
+}
+
+// Given Flush=true (AutoFlush=true on config) and the flush command fails
+// When saveHosts() runs
+// Then stderr contains "Warning: hosts file saved but DNS cache flush failed"
+// And the process does NOT exit (saveHosts returns normally).
+func TestSaveHosts_FlushFails_StderrWarning(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	origFunc := txeh.ExecCommandFunc()
+	defer txeh.SetExecCommandFunc(origFunc)
+	txeh.SetExecCommandFunc(func(name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(context.Background(), "false") //nolint:gosec // test
+	})
+
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
+		ReadFilePath:  etcHosts.WriteFilePath,
+		WriteFilePath: etcHosts.WriteFilePath,
+		AutoFlush:     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	etcHosts = hosts
+	Flush = true
+	Quiet = false
+
+	etcHosts.AddHost("192.168.1.1", "flushtest")
+
+	stderrOutput := captureStderr(func() {
+		saveHosts()
+	})
+
+	if !strings.Contains(stderrOutput, "Warning: hosts file saved but DNS cache flush failed") {
+		t.Errorf("expected flush warning on stderr, got: %q", stderrOutput)
+	}
+	if !strings.Contains(stderrOutput, "DNS cache may be stale") {
+		t.Errorf("expected stale cache hint on stderr, got: %q", stderrOutput)
+	}
+}
+
+// Given Flush=true, Quiet=true, and flush fails
+// When saveHosts() runs
+// Then stderr contains the warning but NOT the "DNS cache may be stale" hint.
+func TestSaveHosts_FlushFails_Quiet_NoHint(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	origFunc := txeh.ExecCommandFunc()
+	defer txeh.SetExecCommandFunc(origFunc)
+	txeh.SetExecCommandFunc(func(name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(context.Background(), "false") //nolint:gosec // test
+	})
+
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
+		ReadFilePath:  etcHosts.WriteFilePath,
+		WriteFilePath: etcHosts.WriteFilePath,
+		AutoFlush:     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	etcHosts = hosts
+	Flush = true
+	Quiet = true
+
+	etcHosts.AddHost("192.168.1.1", "flushtest")
+
+	stderrOutput := captureStderr(func() {
+		saveHosts()
+	})
+
+	if !strings.Contains(stderrOutput, "Warning:") {
+		t.Errorf("expected warning on stderr even in quiet mode, got: %q", stderrOutput)
+	}
+	if strings.Contains(stderrOutput, "DNS cache may be stale") {
+		t.Errorf("quiet mode should suppress the hint, got: %q", stderrOutput)
+	}
+}
+
+// Given Flush=false
+// When saveHosts() runs after a successful save
+// Then stdout does NOT contain "DNS cache flushed.".
+func TestSaveHosts_NoFlush_NoMessage(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	Flush = false
+	Quiet = false
+
+	etcHosts.AddHost("192.168.1.1", "noflush")
+
+	output := captureOutput(func() {
+		saveHosts()
+	})
+
+	if strings.Contains(output, "DNS cache flushed") {
+		t.Errorf("should not print flush message when Flush=false, got: %q", output)
+	}
+}
+
+// --- TXEH_AUTO_FLUSH env var ---
+
+// Given TXEH_AUTO_FLUSH=1
+// When initEtcHosts() runs
+// Then Flush is set to true.
+func TestInitEtcHosts_EnvAutoFlush(t *testing.T) {
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origFlush := Flush
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		Flush = origFlush
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 0
+	Flush = false
+
+	t.Setenv("TXEH_AUTO_FLUSH", "1")
+
+	initEtcHosts()
+
+	if !Flush {
+		t.Error("TXEH_AUTO_FLUSH=1 should set Flush to true")
+	}
+}
+
+// Given TXEH_AUTO_FLUSH=0
+// When initEtcHosts() runs
+// Then Flush remains false.
+func TestInitEtcHosts_EnvAutoFlush_NotSet(t *testing.T) {
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origFlush := Flush
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		Flush = origFlush
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 0
+	Flush = false
+
+	t.Setenv("TXEH_AUTO_FLUSH", "0")
+
+	initEtcHosts()
+
+	if Flush {
+		t.Error("TXEH_AUTO_FLUSH=0 should not set Flush to true")
+	}
+}
+
+// --- Flag registration ---
+
+// Given the root command
+// When looking up the "flush" persistent flag
+// Then it exists with shorthand "f".
+func TestFlushFlag_Registered(t *testing.T) {
+	f := rootCmd.PersistentFlags().Lookup("flush")
+	if f == nil {
+		t.Fatal("--flush flag not registered")
+	}
+	if f.Shorthand != "f" {
+		t.Errorf("Expected shorthand 'f', got %q", f.Shorthand)
 	}
 }

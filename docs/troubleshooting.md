@@ -32,7 +32,7 @@ Add this line to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to make it p
 
 After adding entries, if the hostname doesn't resolve:
 
-1. **Flush DNS cache:**
+1. **Flush DNS cache.** You can do this automatically with `txeh --flush` (or set `TXEH_AUTO_FLUSH=1`). See the [CLI reference](cli.md#dns-cache-flushing) for details. To flush manually:
 
     === "macOS"
 

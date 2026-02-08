@@ -70,6 +70,7 @@ sudo txeh add 127.0.0.1 myapp.local --dryrun
 | `--quiet` | `-q` | Suppress output |
 | `--read` | `-r` | Override path to read hosts file |
 | `--write` | `-w` | Override path to write hosts file |
+| `--flush` | `-f` | Flush DNS cache after modifying the hosts file |
 | `--max-hosts-per-line` | `-m` | Max hostnames per line (0=auto, -1=unlimited) |
 
 ## Commands
@@ -206,3 +207,34 @@ Print the txeh version.
 ```bash
 txeh version
 ```
+
+## DNS Cache Flushing
+
+The `--flush` (`-f`) flag triggers a DNS cache flush after writing the hosts file. This makes new entries resolve immediately without manual intervention.
+
+```bash
+sudo txeh add 127.0.0.1 myapp.local --flush
+```
+
+You can also set the `TXEH_AUTO_FLUSH` environment variable to always flush:
+
+```bash
+export TXEH_AUTO_FLUSH=1
+sudo txeh add 127.0.0.1 myapp.local   # flush happens automatically
+```
+
+If the flush fails (e.g., the resolver binary is missing), the hosts file is still saved. txeh prints a warning to stderr and exits normally.
+
+### Platform Commands
+
+txeh runs these OS-provided commands. Nothing extra needs to be installed.
+
+| Platform | Command | Notes |
+|----------|---------|-------|
+| macOS | `dscacheutil -flushcache` + `killall -HUP mDNSResponder` | Ships with macOS. Works on 10.15 Catalina through current. |
+| Linux | `resolvectl flush-caches` or `systemd-resolve --flush-caches` | Requires systemd-resolved. See below. |
+| Windows | `ipconfig /flushdns` | Ships with all supported Windows versions. |
+
+### Linux Without systemd-resolved
+
+If your Linux system doesn't run systemd-resolved (common with dnsmasq, unbound, or no local caching), txeh prints a warning and exits normally. In this case, flushing isn't needed because DNS lookups go directly to `/etc/hosts` or to a remote resolver that doesn't cache your local entries.

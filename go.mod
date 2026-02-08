@@ -1,6 +1,6 @@
 module github.com/txn2/txeh
 
-go 1.24.4
+go 1.24.7
 
 require (
 	github.com/spf13/cobra v1.10.2

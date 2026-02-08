@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -40,15 +39,5 @@ var removeIPCmd = &cobra.Command{
 // removeIPs removes the given IP addresses from the hosts file.
 func removeIPs(ips []string) {
 	etcHosts.RemoveAddresses(ips)
-
-	if DryRun {
-		fmt.Print(etcHosts.RenderHostsFile())
-		return
-	}
-
-	err := etcHosts.Save()
-	if err != nil {
-		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
-		os.Exit(1)
-	}
+	saveHosts()
 }

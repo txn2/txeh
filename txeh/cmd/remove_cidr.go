@@ -45,14 +45,5 @@ func RemoveIPRanges(cidrs []string) {
 		os.Exit(1)
 	}
 
-	if DryRun {
-		fmt.Print(etcHosts.RenderHostsFile())
-		return
-	}
-
-	err = etcHosts.Save()
-	if err != nil {
-		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
-		os.Exit(1)
-	}
+	saveHosts()
 }
