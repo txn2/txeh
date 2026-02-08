@@ -18,17 +18,20 @@ txeh is a Go library and CLI utility for managing /etc/hosts file entries. It pr
 
 ```bash
 # Full verification (run before every commit)
-make verify          # fmt, lint, test-unit, security, go mod verify
+make verify          # fmt, lint, test-unit, security, coverage-check, go mod verify
 
-# Extended verification
-make verify-full     # fmt, lint, test, security, go mod verify
+# Extended verification (adds dead-code analysis)
+make verify-full     # fmt, lint, test, security, coverage-check, dead-code, go mod verify
 
 # Format, lint, test individually
 make fmt             # gofmt + goimports
-make lint            # golangci-lint
+make lint            # golangci-lint (37 linters, no test relaxations)
 make test-unit       # go test -race ./...
+make test-short      # Fast tests (no race detection)
 make coverage        # Coverage report (HTML + summary)
+make coverage-check  # Enforce 80% coverage threshold
 make security        # gosec + govulncheck
+make mutate          # Mutation testing (gremlins, 60% efficacy threshold)
 ```
 
 ## Architecture
@@ -68,8 +71,9 @@ make security        # gosec + govulncheck
 ### Style
 - Follow [Google Go Style Guide](https://google.github.io/styleguide/go/)
 - All code must pass `golangci-lint` with project config
-- Maximum cyclomatic complexity: 15
-- Maximum cognitive complexity: 20
+- Maximum cyclomatic complexity: 10 per function
+- Maximum cognitive complexity: 15 per function
+- Maximum function arguments: 5
 
 ### Documentation
 - All exported functions, types, and packages require doc comments
@@ -93,10 +97,42 @@ func (h *Hosts) Save() error {
 ```
 
 ### Testing
-- Test coverage minimum: 82%
+- Test coverage minimum: 80% (CI enforced)
 - Use table-driven tests for multiple cases
 - Use `t.Parallel()` for independent tests
 - Race detection required: `go test -race ./...`
+- Property-based tests with `rapid` for invariant verification
+
+### Verification Stack
+
+All changes go through a 4-level verification process (see [AI-Verified Development](https://imti.co/ai-verified-development/)):
+
+1. **Static analysis** - `make lint` runs golangci-lint with 37 linters. Runs in seconds, catches type errors, complexity violations, security anti-patterns.
+2. **Unit tests** - `make test-unit` runs with `-race`. Coverage gate at 80%. `make coverage-check` enforces this locally.
+3. **Integration/E2E tests** - Tagged test suites (`-tags=integration`, `-tags=e2e`) for system-level validation.
+4. **Mutation testing** - `make mutate` runs gremlins with a 60% efficacy threshold. Validates that tests catch real bugs, not just exercise code.
+
+Do not review AI code until every level passes. `make verify` runs levels 1-2 plus security. `make verify-full` adds dead-code analysis.
+
+### Acceptance Criteria
+
+Define specs as Given/When/Then assertions before writing code. Each "then" becomes a concrete test with a hardcoded expected value.
+
+```
+Given a hosts file with "127.0.0.1 myhost"
+When RemoveHost("myhost") is called
+Then ListHostsByIP("127.0.0.1") returns an empty list
+```
+
+Write the test first, confirm it fails, then implement.
+
+### AI-Specific Rules
+
+- **No tautological tests.** Tests must encode specific expected outputs as hardcoded values. Never reimplement function logic inside assertions.
+- **No hallucinated imports.** Verify every dependency exists and is actively maintained before adding it.
+- **Human review required.** A human must review and approve every line of code before commit.
+- **Non-obvious decisions require comments.** If a choice isn't self-evident, explain why in a comment or commit message.
+- **Dead code detection.** Run `make dead-code` to remove untested utilities. Unreachable code is a sign of tautological tests.
 
 ## Security Requirements
 
@@ -148,10 +184,10 @@ make lint-fix       # Run golangci-lint with auto-fix
 make fmt            # Format code (gofmt + goimports)
 
 # Before committing
-make verify         # fmt, lint, test-unit, security, go mod verify
+make verify         # fmt, lint, test-unit, security, coverage-check, go mod verify
 
 # Extended verification
-make verify-full    # fmt, lint, test, security, go mod verify
+make verify-full    # fmt, lint, test, security, coverage-check, dead-code, go mod verify
 
 # Testing
 make test-integration  # Integration tests (tagged)

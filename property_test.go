@@ -1,6 +1,7 @@
 package txeh
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"testing/quick"
@@ -54,12 +55,7 @@ func TestProperty_AddHost_ThenLookup_FindsIt(t *testing.T) {
 		hosts.AddHost(ip, hostname)
 		found := hosts.ListHostsByIP(ip)
 
-		for _, h := range found {
-			if h == hostname {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(found, hostname)
 	}
 	if err := quick.Check(f, &quick.Config{MaxCount: 500}); err != nil {
 		t.Error(err)
@@ -87,10 +83,8 @@ func TestProperty_RemoveHost_ThenLookup_NeverFindsIt(t *testing.T) {
 		// Must not appear at any address
 		lines := hosts.GetHostFileLines()
 		for _, line := range lines {
-			for _, h := range line.Hostnames {
-				if h == hostname {
-					return false
-				}
+			if slices.Contains(line.Hostnames, hostname) {
+				return false
 			}
 		}
 		return true
@@ -231,7 +225,7 @@ func TestRapid_AddRemove_Symmetry(t *testing.T) {
 		ip := validIPGen().Draw(t, "ip")
 		hostname := hostnameGen().Draw(t, "hostname")
 
-		base := "127.0.0.1 localhost\n"
+		base := testHostsLocalhost
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatal(err)
@@ -241,13 +235,7 @@ func TestRapid_AddRemove_Symmetry(t *testing.T) {
 
 		// Verify it was added
 		found := hosts.ListHostsByIP(ip)
-		hasHost := false
-		for _, h := range found {
-			if h == hostname {
-				hasHost = true
-				break
-			}
-		}
+		hasHost := slices.Contains(found, hostname)
 		if !hasHost {
 			t.Fatalf("AddHost(%q, %q) did not add the host", ip, hostname)
 		}
@@ -328,13 +316,13 @@ func TestRapid_BulkAddRemove_StateConsistency(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		numOps := rapid.IntRange(5, 30).Draw(t, "numOps")
 
-		base := "127.0.0.1 localhost\n"
+		base := testHostsLocalhost
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		for i := 0; i < numOps; i++ {
+		for range numOps {
 			ip := validIPGen().Draw(t, "ip")
 			hostname := hostnameGen().Draw(t, "hostname")
 
@@ -355,17 +343,23 @@ func TestRapid_BulkAddRemove_StateConsistency(t *testing.T) {
 		}
 
 		// All ADDRESS lines must have non-empty address and hostnames
-		for _, line := range reparsed {
-			if line.LineType == ADDRESS {
-				if line.Address == "" {
-					t.Fatal("ADDRESS line has empty address after bulk operations")
-				}
-				if len(line.Hostnames) == 0 {
-					t.Fatal("ADDRESS line has no hostnames after bulk operations")
-				}
+		validateParsedLines(t, reparsed, numOps)
+	})
+}
+
+// validateParsedLines checks that all ADDRESS lines have non-empty address and hostnames.
+func validateParsedLines(t *rapid.T, lines []HostFileLine, _ int) {
+	t.Helper()
+	for _, line := range lines {
+		if line.LineType == ADDRESS {
+			if line.Address == "" {
+				t.Fatal("ADDRESS line has empty address after bulk operations")
+			}
+			if len(line.Hostnames) == 0 {
+				t.Fatal("ADDRESS line has no hostnames after bulk operations")
 			}
 		}
-	})
+	}
 }
 
 // TestRapid_CommentOperations_Consistent verifies that adding hosts with comments
@@ -380,7 +374,7 @@ func TestRapid_CommentOperations_Consistent(t *testing.T) {
 			"kubefwd", "added by myapp", "test entry", "k8s-svc",
 		}).Draw(t, "comment")
 
-		base := "127.0.0.1 localhost\n"
+		base := testHostsLocalhost
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatal(err)
@@ -391,13 +385,7 @@ func TestRapid_CommentOperations_Consistent(t *testing.T) {
 
 		// Must be findable by comment
 		byComment := hosts.ListHostsByComment(comment)
-		found := false
-		for _, h := range byComment {
-			if h == hostname {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(byComment, hostname)
 		if !found {
 			t.Fatalf("AddHostWithComment(%q, %q, %q): host not found via ListHostsByComment", ip, hostname, comment)
 		}
@@ -447,13 +435,7 @@ func TestRapid_HostnameMoveBetweenAddresses(t *testing.T) {
 		}
 
 		atIP2 := hosts.ListHostsByIP(ip2)
-		found := false
-		for _, h := range atIP2 {
-			if h == hostname {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(atIP2, hostname)
 		if !found {
 			t.Fatalf("hostname %q not found at new address %s", hostname, ip2)
 		}
@@ -478,8 +460,8 @@ func TestRapid_RenderParse_PreservesAddressEntries(t *testing.T) {
 			ip       string
 			hostname string
 		}
-		var entries []entry
-		for i := 0; i < numEntries; i++ {
+		entries := make([]entry, 0, numEntries)
+		for range numEntries {
 			ip := validIPGen().Draw(t, "ip")
 			hostname := hostnameGen().Draw(t, "hostname")
 			hosts.AddHost(ip, hostname)

@@ -5,11 +5,16 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/txn2/txeh"
 )
+
+const testHostLocalhost = "localhost"
+
+const testHostsWithComments = "127.0.0.1        localhost\n127.0.0.1        app1 # dev services\n"
 
 // Bug Regression Tests for CMD package
 // These tests document and verify bugs found during code analysis.
@@ -314,8 +319,8 @@ func TestValidateCIDR_Invalid(t *testing.T) {
 // Phase 2: CLI Integration Tests
 // =============================================================================
 
-// Helper to create a temp hosts file and initialize etcHosts
-func setupTestHosts(t *testing.T, content string) (string, func()) {
+// Helper to create a temp hosts file and initialize etcHosts.
+func setupTestHosts(t *testing.T, content string) (path string, cleanup func()) {
 	t.Helper()
 
 	tmpFile, err := os.CreateTemp("", "hosts_test_*")
@@ -347,7 +352,7 @@ func setupTestHosts(t *testing.T, content string) (string, func()) {
 	}
 	etcHosts = hosts
 
-	cleanup := func() {
+	cleanup = func() {
 		_ = os.Remove(tmpFile.Name())
 		HostsFileReadPath = ""
 		HostsFileWritePath = ""
@@ -358,7 +363,7 @@ func setupTestHosts(t *testing.T, content string) (string, func()) {
 	return tmpFile.Name(), cleanup
 }
 
-// Helper to capture stdout
+// Helper to capture stdout.
 func captureOutput(f func()) string {
 	old := os.Stdout
 	r, w, err := os.Pipe()
@@ -408,7 +413,7 @@ func TestAddHosts_DryRun(t *testing.T) {
 	}
 
 	// File should NOT be modified (read original content)
-	content, _ := os.ReadFile(path)
+	content, _ := os.ReadFile(filepath.Clean(path))
 	if strings.Contains(string(content), "newhost") {
 		t.Error("Dry run should not modify the file")
 	}
@@ -520,7 +525,7 @@ func TestRemoveHosts_DryRun(t *testing.T) {
 	}
 
 	// But file should still have it
-	content, _ := os.ReadFile(path)
+	content, _ := os.ReadFile(filepath.Clean(path))
 	if !strings.Contains(string(content), "myhost") {
 		t.Error("Dry run should not modify the file")
 	}
@@ -535,7 +540,7 @@ func TestRemoveHosts_Nonexistent(t *testing.T) {
 
 	// localhost should still be there
 	result := etcHosts.ListHostsByIP("127.0.0.1")
-	if len(result) != 1 || result[0] != "localhost" {
+	if len(result) != 1 || result[0] != testHostLocalhost {
 		t.Errorf("localhost should remain unchanged: %v", result)
 	}
 }
@@ -751,7 +756,7 @@ func TestInitEtcHosts_WithPaths(t *testing.T) {
 	}
 
 	result := etcHosts.ListHostsByIP("127.0.0.1")
-	if len(result) != 1 || result[0] != "localhost" {
+	if len(result) != 1 || result[0] != testHostLocalhost {
 		t.Errorf("etcHosts should contain localhost: %v", result)
 	}
 }
@@ -761,59 +766,13 @@ func TestInitEtcHosts_WithPaths(t *testing.T) {
 // =============================================================================
 
 func TestListByComment_Basic(t *testing.T) {
-	hostsContent := `127.0.0.1        localhost
-127.0.0.1        app1 app2 # dev services
-127.0.0.1        api1 # dev services
-192.168.1.1      staging # staging env
-`
-	tmpFile, err := os.CreateTemp("", "hosts-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Remove(tmpFile.Name()); err != nil {
-			t.Logf("Warning: failed to remove temp file: %v", err)
-		}
-	}()
+	hostsContent := "127.0.0.1        localhost\n127.0.0.1        app1 app2 # dev services\n127.0.0.1        api1 # dev services\n192.168.1.1      staging # staging env\n"
+	_, cleanup := setupTestHosts(t, hostsContent)
+	defer cleanup()
 
-	if _, err := tmpFile.WriteString(hostsContent); err != nil {
-		t.Fatal(err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Setup test environment
-	origRead := HostsFileReadPath
-	origWrite := HostsFileWritePath
-	origHosts := etcHosts
-	defer func() {
-		HostsFileReadPath = origRead
-		HostsFileWritePath = origWrite
-		etcHosts = origHosts
-	}()
-
-	HostsFileReadPath = tmpFile.Name()
-	HostsFileWritePath = tmpFile.Name()
-	initEtcHosts()
-
-	// Capture output
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	ListByComment("dev services")
-
-	if err := w.Close(); err != nil {
-		t.Logf("Warning: failed to close pipe writer: %v", err)
-	}
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatal(err)
-	}
-	output := buf.String()
+	output := captureOutput(func() {
+		ListByComment("dev services")
+	})
 
 	// Should list app1, app2, api1
 	if !strings.Contains(output, "app1") {
@@ -832,46 +791,15 @@ func TestListByComment_Basic(t *testing.T) {
 }
 
 func TestRemoveByComment_Basic(t *testing.T) {
-	hostsContent := `127.0.0.1        localhost
-127.0.0.1        app1 app2 # dev services
-192.168.1.1      staging # staging env
-`
-	tmpFile, err := os.CreateTemp("", "hosts-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Remove(tmpFile.Name()); err != nil {
-			t.Logf("Warning: failed to remove temp file: %v", err)
-		}
-	}()
-
-	if _, err := tmpFile.WriteString(hostsContent); err != nil {
-		t.Fatal(err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Setup test environment
-	origRead := HostsFileReadPath
-	origWrite := HostsFileWritePath
-	origHosts := etcHosts
-	defer func() {
-		HostsFileReadPath = origRead
-		HostsFileWritePath = origWrite
-		etcHosts = origHosts
-	}()
-
-	HostsFileReadPath = tmpFile.Name()
-	HostsFileWritePath = tmpFile.Name()
-	initEtcHosts()
+	hostsContent := "127.0.0.1        localhost\n127.0.0.1        app1 app2 # dev services\n192.168.1.1      staging # staging env\n"
+	path, cleanup := setupTestHosts(t, hostsContent)
+	defer cleanup()
 
 	// Remove all entries with "dev services" comment
 	RemoveByComment("dev services")
 
 	// Reload and verify
-	hosts, err := txeh.NewHosts(&txeh.HostsConfig{ReadFilePath: tmpFile.Name()})
+	hosts, err := txeh.NewHosts(&txeh.HostsConfig{ReadFilePath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -884,7 +812,7 @@ func TestRemoveByComment_Basic(t *testing.T) {
 
 	// localhost should still be there
 	result = hosts.ListHostsByIP("127.0.0.1")
-	if len(result) != 1 || result[0] != "localhost" {
+	if len(result) != 1 || result[0] != testHostLocalhost {
 		t.Errorf("localhost should remain: %v", result)
 	}
 
@@ -896,9 +824,7 @@ func TestRemoveByComment_Basic(t *testing.T) {
 }
 
 func TestListByComment_NoMatch(t *testing.T) {
-	hostsContent := `127.0.0.1        localhost
-127.0.0.1        app1 # dev services
-`
+	hostsContent := testHostsWithComments
 	tmpFile, err := os.CreateTemp("", "hosts-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -954,9 +880,7 @@ func TestListByComment_NoMatch(t *testing.T) {
 }
 
 func TestRemoveByComment_NoMatch(t *testing.T) {
-	hostsContent := `127.0.0.1        localhost
-127.0.0.1        app1 # dev services
-`
+	hostsContent := testHostsWithComments
 	tmpFile, err := os.CreateTemp("", "hosts-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -1003,9 +927,7 @@ func TestRemoveByComment_NoMatch(t *testing.T) {
 }
 
 func TestListByComment_EmptyComment(t *testing.T) {
-	hostsContent := `127.0.0.1        localhost
-127.0.0.1        app1 # dev services
-`
+	hostsContent := testHostsWithComments
 	tmpFile, err := os.CreateTemp("", "hosts-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -1083,7 +1005,7 @@ func TestRemoveIPs_DryRun(t *testing.T) {
 	}
 
 	// File should still have it
-	content, _ := os.ReadFile(path)
+	content, _ := os.ReadFile(filepath.Clean(path))
 	if !strings.Contains(string(content), "server") {
 		t.Error("Dry run should not modify the file")
 	}
@@ -1111,7 +1033,7 @@ func TestRemoveIPRanges_DryRun(t *testing.T) {
 	}
 
 	// File should still have the original content
-	content, _ := os.ReadFile(path)
+	content, _ := os.ReadFile(filepath.Clean(path))
 	if !strings.Contains(string(content), "server1") {
 		t.Error("Dry run should not modify the file")
 	}
@@ -1139,7 +1061,7 @@ func TestRemoveByComment_DryRun(t *testing.T) {
 	}
 
 	// File should still have original content
-	content, _ := os.ReadFile(path)
+	content, _ := os.ReadFile(filepath.Clean(path))
 	if !strings.Contains(string(content), "app1") {
 		t.Error("Dry run should not modify the file")
 	}

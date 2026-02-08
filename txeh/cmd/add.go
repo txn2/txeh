@@ -1,4 +1,3 @@
-// Package cmd implements the txeh command-line interface.
 package cmd
 
 import (

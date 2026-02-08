@@ -4,10 +4,35 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 )
+
+const (
+	testIPv4Localhost  = "127.0.0.1"
+	testIPv4Alt        = "192.168.1.1"
+	testHostsExisting  = "127.0.0.1 existinghost\n"
+	testHostsLocalhost = "127.0.0.1 localhost\n"
+	testCommentMyApp   = "my-app"
+)
+
+// createTempHostsFile creates a temporary file with the given content and
+// returns the file path. The caller is responsible for removing the file.
+func createTempHostsFile(t *testing.T, content string) string {
+	t.Helper()
+	tmpFile, err := os.CreateTemp("", "hosts_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	if _, err := tmpFile.WriteString(content); err != nil {
+		_ = os.Remove(tmpFile.Name())
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	_ = tmpFile.Close()
+	return tmpFile.Name()
+}
 
 var mockHostsData = `127.0.0.1        localhost
 127.0.1.1        straylight-desk
@@ -74,13 +99,7 @@ func TestNewHostsDefault(t *testing.T) {
 	testHostName := "test-new-hosts-default"
 	hosts.AddHost("127.100.100.100", testHostName)
 	foundHostnames := hosts.ListHostsByIP("127.100.100.100")
-	found := false
-	for _, hn := range foundHostnames {
-		if hn == testHostName {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(foundHostnames, testHostName)
 
 	if !found {
 		t.Fatal("TestNewHostsDefault was unable find the hostname it added")
@@ -99,13 +118,7 @@ func TestNewHosts(t *testing.T) {
 	testHostName := "test-new-hosts-default"
 	blankHosts.AddHost("127.100.100.100", testHostName)
 	foundHostnames := blankHosts.ListHostsByIP("127.100.100.100")
-	found := false
-	for _, hn := range foundHostnames {
-		if hn == testHostName {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(foundHostnames, testHostName)
 
 	if !found {
 		t.Fatal("TestNewHosts was unable find the hostname it added")
@@ -131,13 +144,7 @@ func TestNewHosts(t *testing.T) {
 	}
 
 	foundHostnames = fromRenderedHosts.ListHostsByIP("127.100.100.100")
-	found = false
-	for _, hn := range foundHostnames {
-		if hn == testHostName {
-			found = true
-			break
-		}
-	}
+	found = slices.Contains(foundHostnames, testHostName)
 
 	if !found {
 		t.Fatal("ListHostsByIP was unable find an IP")
@@ -189,7 +196,7 @@ func TestMethods(t *testing.T) {
 	if !ok {
 		t.Fatalf("could not find IPv4 address for localhost")
 	}
-	if ipString != "127.0.0.1" {
+	if ipString != testIPv4Localhost {
 		t.Fatalf("returned incorrect IPv4 address for localhost: %s", ipString)
 	}
 
@@ -197,7 +204,7 @@ func TestMethods(t *testing.T) {
 	requireAddressesByHostCount(t, mockHosts, "nifi", false, 70)
 	requireHostsByCIDRCount(t, mockHosts, "127.0.0.0/24", 1)
 	requireHostsByCIDRCount(t, mockHosts, "127.1.27.0/24", 252)
-	requireHostsByIPCount(t, mockHosts, "127.0.0.1", 1)
+	requireHostsByIPCount(t, mockHosts, testIPv4Localhost, 1)
 	requireHostsByIPCount(t, mockHosts, "127.1.27.1", 7)
 	requireHostsByIPCount(t, mockHosts, "127.1.27.2", 7)
 
@@ -254,7 +261,7 @@ func TestMethods(t *testing.T) {
 }
 
 func TestWinDefaultHostsFile(t *testing.T) {
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != osWindows {
 		t.Skip("Skipping windows test")
 	}
 
@@ -299,8 +306,8 @@ func TestWinDefaultHostsFile(t *testing.T) {
 // Tests are designed to FAIL until the corresponding bugs are fixed.
 // =============================================================================
 
-// BUG #2: ParseHostsFromString drops last line if no trailing newline
-// File: txeh.go:442
+// BUG #2: ParseHostsFromString drops last line if no trailing newline.
+// File: txeh.go:442.
 func TestParseHosts_NoTrailingNewline(t *testing.T) {
 	input := "127.0.0.1 localhost"
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
@@ -308,7 +315,7 @@ func TestParseHosts_NoTrailingNewline(t *testing.T) {
 		t.Fatalf("Failed to parse hosts: %v", err)
 	}
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 1 {
 		t.Errorf("Last line dropped when no trailing newline. Expected 1 host, got %d", len(result))
 	}
@@ -327,8 +334,8 @@ func TestParseHosts_NoTrailingNewline_MultipleLines(t *testing.T) {
 	}
 }
 
-// BUG #3: GetHostFileLines returns pointer to internal data
-// File: txeh.go:422-427
+// BUG #3: GetHostFileLines returns pointer to internal data.
+// File: txeh.go:422-427.
 func TestGetHostFileLines_ReturnsInternalPointer(t *testing.T) {
 	input := "127.0.0.1 original\n"
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
@@ -338,7 +345,7 @@ func TestGetHostFileLines_ReturnsInternalPointer(t *testing.T) {
 
 	lines := hosts.GetHostFileLines()
 	if len(lines) > 0 {
-		lines[0].Address = "192.168.1.1"
+		lines[0].Address = testIPv4Alt
 		lines[0].Hostnames = []string{"modified"}
 	}
 
@@ -361,7 +368,7 @@ func TestGetHostFileLines_ThreadSafety(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			lines := hosts.GetHostFileLines()
 			if len(lines) > 0 {
 				// This now modifies a copy, not internal state
@@ -373,8 +380,8 @@ func TestGetHostFileLines_ThreadSafety(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < iterations; i++ {
-			hosts.AddHost("127.0.0.1", "safe")
+		for range iterations {
+			hosts.AddHost(testIPv4Localhost, "safe")
 		}
 	}()
 
@@ -382,22 +389,22 @@ func TestGetHostFileLines_ThreadSafety(t *testing.T) {
 	// With the fix, this should pass even with -race
 }
 
-// BUG #4: AddHost TOCTOU race condition
-// File: txeh.go:263-325
+// BUG #4: AddHost TOCTOU race condition.
+// File: txeh.go:263-325.
 func TestAddHost_TOCTOU_Race(t *testing.T) {
-	input := "127.0.0.1 existinghost\n"
+	input := testHostsExisting
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				hosts.AddHost("127.0.0.1", "existinghost")
+			for range 100 {
+				hosts.AddHost(testIPv4Localhost, "existinghost")
 				hosts.AddHost("127.0.0.2", "existinghost")
 			}
 		}()
@@ -406,10 +413,10 @@ func TestAddHost_TOCTOU_Race(t *testing.T) {
 	// Run with -race to detect TOCTOU race
 }
 
-// BUG #5: ListHostsByCIDR panics on invalid CIDR
-// File: txeh.go:371
+// BUG #5: ListHostsByCIDR panics on invalid CIDR.
+// File: txeh.go:371.
 func TestListHostsByCIDR_InvalidCIDR_Panics(t *testing.T) {
-	input := "127.0.0.1 localhost\n"
+	input := testHostsLocalhost
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
@@ -424,8 +431,8 @@ func TestListHostsByCIDR_InvalidCIDR_Panics(t *testing.T) {
 	_ = hosts.ListHostsByCIDR("not-a-valid-cidr")
 }
 
-// BUG #6: Windows line endings not preserved
-// File: txeh.go:437-438
+// BUG #6: Windows line endings not preserved.
+// File: txeh.go:437-438.
 func TestWindowsLineEndings_NotPreserved(t *testing.T) {
 	input := "127.0.0.1 localhost\r\n192.168.1.1 server\r\n"
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
@@ -476,7 +483,7 @@ func TestParseHosts_InlineComment(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 1 || result[0] != "localhost" {
 		t.Errorf("Expected ['localhost'], got %v", result)
 	}
@@ -494,7 +501,7 @@ func TestParseHosts_TabSeparated(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 2 {
 		t.Errorf("Expected 2 hosts (tab-separated), got %d", len(result))
 	}
@@ -533,7 +540,7 @@ func TestParseHosts_IPv6_Full(t *testing.T) {
 // --- Reload Tests ---
 
 func TestReload_WithRawText_ReturnsError(t *testing.T) {
-	input := "127.0.0.1 localhost\n"
+	input := testHostsLocalhost
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
@@ -550,35 +557,24 @@ func TestReload_WithRawText_ReturnsError(t *testing.T) {
 }
 
 func TestReload_Success(t *testing.T) {
-	// Create a temp file
-	tmpFile, err := os.CreateTemp("", "hosts_test_*")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
-
-	// Write initial content
-	initialContent := "127.0.0.1 localhost\n"
-	if _, err := tmpFile.WriteString(initialContent); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
-	_ = tmpFile.Close()
+	path := createTempHostsFile(t, testHostsLocalhost)
+	defer func() { _ = os.Remove(path) }()
 
 	// Load the hosts file
-	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
+	hosts, err := NewHosts(&HostsConfig{ReadFilePath: path})
 	if err != nil {
 		t.Fatalf("Failed to load hosts: %v", err)
 	}
 
 	// Verify initial state
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 1 || result[0] != "localhost" {
 		t.Errorf("Initial state incorrect: %v", result)
 	}
 
 	// Modify the file externally
 	newContent := "127.0.0.1 localhost newhost\n192.168.1.1 server\n"
-	if err := os.WriteFile(tmpFile.Name(), []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(newContent), 0o644); err != nil {
 		t.Fatalf("Failed to update temp file: %v", err)
 	}
 
@@ -588,12 +584,12 @@ func TestReload_Success(t *testing.T) {
 	}
 
 	// Verify new state
-	result = hosts.ListHostsByIP("127.0.0.1")
+	result = hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 2 {
 		t.Errorf("After reload expected 2 hosts, got %d: %v", len(result), result)
 	}
 
-	result = hosts.ListHostsByIP("192.168.1.1")
+	result = hosts.ListHostsByIP(testIPv4Alt)
 	if len(result) != 1 || result[0] != "server" {
 		t.Errorf("After reload, new entry not found: %v", result)
 	}
@@ -605,7 +601,7 @@ func TestReload_FileNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_, _ = tmpFile.WriteString(testHostsLocalhost)
 	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
@@ -626,7 +622,7 @@ func TestReload_FileNotFound(t *testing.T) {
 // --- SaveAs Tests ---
 
 func TestSaveAs_Success(t *testing.T) {
-	input := "127.0.0.1 localhost\n"
+	input := testHostsLocalhost
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
@@ -646,7 +642,7 @@ func TestSaveAs_RealFile(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
-	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_, _ = tmpFile.WriteString(testHostsLocalhost)
 	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
@@ -655,7 +651,7 @@ func TestSaveAs_RealFile(t *testing.T) {
 	}
 
 	// Add a host
-	hosts.AddHost("192.168.1.1", "newserver")
+	hosts.AddHost(testIPv4Alt, "newserver")
 
 	// Save to a different file
 	outputFile, err := os.CreateTemp("", "hosts_output_*")
@@ -686,7 +682,7 @@ func TestSaveAs_InvalidPath(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
-	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_, _ = tmpFile.WriteString(testHostsLocalhost)
 	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
@@ -704,18 +700,18 @@ func TestSaveAs_InvalidPath(t *testing.T) {
 // --- AddHost Edge Cases ---
 
 func TestAddHost_Localhost_AllowsDuplicates(t *testing.T) {
-	input := "127.0.0.1 existinghost\n"
+	input := testHostsExisting
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
 	// Add same host to different localhost addresses
-	hosts.AddHost("127.0.0.1", "existinghost")
+	hosts.AddHost(testIPv4Localhost, "existinghost")
 	hosts.AddHost("127.0.0.2", "existinghost")
 
 	// For localhost addresses, duplicates should be allowed
-	result1 := hosts.ListHostsByIP("127.0.0.1")
+	result1 := hosts.ListHostsByIP(testIPv4Localhost)
 	result2 := hosts.ListHostsByIP("127.0.0.2")
 
 	// The host should appear at both localhost addresses
@@ -796,10 +792,10 @@ func TestAddHost_EmptyHostname(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHost("127.0.0.1", "")
-	hosts.AddHost("127.0.0.1", "   ")
+	hosts.AddHost(testIPv4Localhost, "")
+	hosts.AddHost(testIPv4Localhost, "   ")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	// Empty/whitespace hostnames are normalized and added
 	// This documents current behavior
 	t.Logf("Empty hostname behavior: %v", result)
@@ -812,11 +808,11 @@ func TestAddHost_CaseNormalization(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHost("127.0.0.1", "MyHost")
-	hosts.AddHost("127.0.0.1", "MYHOST")
-	hosts.AddHost("127.0.0.1", "myhost")
+	hosts.AddHost(testIPv4Localhost, "MyHost")
+	hosts.AddHost(testIPv4Localhost, "MYHOST")
+	hosts.AddHost(testIPv4Localhost, "myhost")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	// All should be normalized to lowercase, so only one entry
 	if len(result) != 1 {
 		t.Errorf("Case normalization should prevent duplicates, got: %v", result)
@@ -827,18 +823,18 @@ func TestAddHost_CaseNormalization(t *testing.T) {
 }
 
 func TestAddHost_SameAddressSameHost_NoOp(t *testing.T) {
-	input := "127.0.0.1 existinghost\n"
+	input := testHostsExisting
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
 	// Add same host to same address multiple times
-	hosts.AddHost("127.0.0.1", "existinghost")
-	hosts.AddHost("127.0.0.1", "existinghost")
-	hosts.AddHost("127.0.0.1", "existinghost")
+	hosts.AddHost(testIPv4Localhost, "existinghost")
+	hosts.AddHost(testIPv4Localhost, "existinghost")
+	hosts.AddHost(testIPv4Localhost, "existinghost")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 1 {
 		t.Errorf("Adding same host to same address should be no-op, got: %v", result)
 	}
@@ -883,7 +879,7 @@ func TestNewHosts_WithReadPath(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
-	_, _ = tmpFile.WriteString("127.0.0.1 localhost\n")
+	_, _ = tmpFile.WriteString(testHostsLocalhost)
 	_ = tmpFile.Close()
 
 	hosts, err := NewHosts(&HostsConfig{ReadFilePath: tmpFile.Name()})
@@ -891,7 +887,7 @@ func TestNewHosts_WithReadPath(t *testing.T) {
 		t.Fatalf("NewHosts failed: %v", err)
 	}
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 1 {
 		t.Errorf("Expected 1 host, got %d", len(result))
 	}
@@ -904,7 +900,7 @@ func TestNewHosts_WithReadAndWritePath(t *testing.T) {
 		t.Fatalf("Failed to create read file: %v", err)
 	}
 	defer func() { _ = os.Remove(readFile.Name()) }()
-	_, _ = readFile.WriteString("127.0.0.1 localhost\n")
+	_, _ = readFile.WriteString(testHostsLocalhost)
 	_ = readFile.Close()
 
 	// Create write file
@@ -923,7 +919,7 @@ func TestNewHosts_WithReadAndWritePath(t *testing.T) {
 		t.Fatalf("NewHosts failed: %v", err)
 	}
 
-	hosts.AddHost("192.168.1.1", "newhost")
+	hosts.AddHost(testIPv4Alt, "newhost")
 	if err := hosts.Save(); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
@@ -960,7 +956,7 @@ func TestHostAddressLookup_IPv4Family(t *testing.T) {
 	if !found {
 		t.Error("Should find host in IPv4 family")
 	}
-	if addr != "127.0.0.1" {
+	if addr != testIPv4Localhost {
 		t.Errorf("Expected 127.0.0.1, got %s", addr)
 	}
 
@@ -975,7 +971,7 @@ func TestHostAddressLookup_IPv4Family(t *testing.T) {
 }
 
 func TestHostAddressLookup_NotFound(t *testing.T) {
-	input := "127.0.0.1 localhost\n"
+	input := testHostsLocalhost
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
@@ -990,7 +986,7 @@ func TestHostAddressLookup_NotFound(t *testing.T) {
 // --- RemoveCIDRs Edge Cases ---
 
 func TestRemoveCIDRs_InvalidCIDR_ReturnsError(t *testing.T) {
-	input := "127.0.0.1 localhost\n"
+	input := testHostsLocalhost
 	hosts, err := NewHosts(&HostsConfig{RawText: &input})
 	if err != nil {
 		t.Fatalf("Failed to create hosts: %v", err)
@@ -1016,12 +1012,12 @@ func TestRemoveCIDRs_MultipleCIDRs(t *testing.T) {
 	}
 
 	// Only 192.168.1.1 should remain
-	result := hosts.ListHostsByIP("192.168.1.1")
+	result := hosts.ListHostsByIP(testIPv4Alt)
 	if len(result) != 1 {
 		t.Error("192.168.1.1 should remain")
 	}
 
-	result = hosts.ListHostsByIP("127.0.0.1")
+	result = hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 0 {
 		t.Error("127.0.0.1 should be removed")
 	}
@@ -1039,12 +1035,12 @@ func TestIsLocalhost(t *testing.T) {
 		address  string
 		expected bool
 	}{
-		{"127.0.0.1", true},
+		{testIPv4Localhost, true},
 		{"127.0.0.2", true},
 		{"127.255.255.255", true},
 		{"127.1.2.3", true},
 		{"::1", true},
-		{"192.168.1.1", false},
+		{testIPv4Alt, false},
 		{"10.0.0.1", false},
 		{"0.0.0.0", false},
 		{"128.0.0.1", false},
@@ -1074,8 +1070,8 @@ func TestMaxHostsPerLine_ExplicitLimit(t *testing.T) {
 	}
 
 	// Add 7 hosts to the same IP
-	for i := 0; i < 7; i++ {
-		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	for i := range 7 {
+		hosts.AddHost(testIPv4Localhost, "host"+string(rune('a'+i)))
 	}
 
 	// Should have 3 lines with 3, 3, and 1 hosts respectively
@@ -1083,7 +1079,7 @@ func TestMaxHostsPerLine_ExplicitLimit(t *testing.T) {
 	addressLines := 0
 	totalHosts := 0
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" {
+		if line.Address == testIPv4Localhost {
 			addressLines++
 			totalHosts += len(line.Hostnames)
 			if len(line.Hostnames) > 3 {
@@ -1111,15 +1107,15 @@ func TestMaxHostsPerLine_Unlimited(t *testing.T) {
 	}
 
 	// Add 20 hosts to the same IP
-	for i := 0; i < 20; i++ {
-		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	for i := range 20 {
+		hosts.AddHost(testIPv4Localhost, "host"+string(rune('a'+i)))
 	}
 
 	// Should have 1 line with all 20 hosts
 	lines := hosts.GetHostFileLines()
 	addressLines := 0
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" {
+		if line.Address == testIPv4Localhost {
 			addressLines++
 			if len(line.Hostnames) != 20 {
 				t.Errorf("Expected 20 hosts on line, got %d", len(line.Hostnames))
@@ -1133,7 +1129,7 @@ func TestMaxHostsPerLine_Unlimited(t *testing.T) {
 }
 
 func TestMaxHostsPerLine_AutoDetect_NonWindows(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("This test is for non-Windows platforms")
 	}
 
@@ -1147,15 +1143,15 @@ func TestMaxHostsPerLine_AutoDetect_NonWindows(t *testing.T) {
 	}
 
 	// Add 20 hosts to the same IP
-	for i := 0; i < 20; i++ {
-		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	for i := range 20 {
+		hosts.AddHost(testIPv4Localhost, "host"+string(rune('a'+i)))
 	}
 
 	// On non-Windows, should be unlimited (1 line with all hosts)
 	lines := hosts.GetHostFileLines()
 	addressLines := 0
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" {
+		if line.Address == testIPv4Localhost {
 			addressLines++
 		}
 	}
@@ -1176,8 +1172,8 @@ func TestMaxHostsPerLine_ExactlyAtLimit(t *testing.T) {
 	}
 
 	// Add exactly 5 hosts
-	for i := 0; i < 5; i++ {
-		hosts.AddHost("127.0.0.1", "host"+string(rune('a'+i)))
+	for i := range 5 {
+		hosts.AddHost(testIPv4Localhost, "host"+string(rune('a'+i)))
 	}
 
 	// Should have exactly 1 line with 5 hosts
@@ -1190,7 +1186,7 @@ func TestMaxHostsPerLine_ExactlyAtLimit(t *testing.T) {
 	}
 
 	// Add one more, should create new line
-	hosts.AddHost("127.0.0.1", "hostf")
+	hosts.AddHost(testIPv4Localhost, "hostf")
 
 	lines = hosts.GetHostFileLines()
 	if len(lines) != 2 {
@@ -1209,8 +1205,8 @@ func TestMaxHostsPerLine_MultipleIPs(t *testing.T) {
 	}
 
 	// Add hosts to multiple IPs
-	for i := 0; i < 5; i++ {
-		hosts.AddHost("127.0.0.1", "host1-"+string(rune('a'+i)))
+	for i := range 5 {
+		hosts.AddHost(testIPv4Localhost, "host1-"+string(rune('a'+i)))
 		hosts.AddHost("127.0.0.2", "host2-"+string(rune('a'+i)))
 	}
 
@@ -1220,7 +1216,7 @@ func TestMaxHostsPerLine_MultipleIPs(t *testing.T) {
 	ip2Lines := 0
 	for _, line := range lines {
 		switch line.Address {
-		case "127.0.0.1":
+		case testIPv4Localhost:
 			ip1Lines++
 		case "127.0.0.2":
 			ip2Lines++
@@ -1246,14 +1242,14 @@ func TestMaxHostsPerLine_HostLookupAcrossLines(t *testing.T) {
 	}
 
 	// Add 5 hosts to same IP (will create 3 lines: 2, 2, 1)
-	hosts.AddHost("127.0.0.1", "hosta")
-	hosts.AddHost("127.0.0.1", "hostb")
-	hosts.AddHost("127.0.0.1", "hostc")
-	hosts.AddHost("127.0.0.1", "hostd")
-	hosts.AddHost("127.0.0.1", "hoste")
+	hosts.AddHost(testIPv4Localhost, "hosta")
+	hosts.AddHost(testIPv4Localhost, "hostb")
+	hosts.AddHost(testIPv4Localhost, "hostc")
+	hosts.AddHost(testIPv4Localhost, "hostd")
+	hosts.AddHost(testIPv4Localhost, "hoste")
 
 	// All hosts should be found when listing by IP
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 5 {
 		t.Errorf("Expected 5 hosts, got %d: %v", len(result), result)
 	}
@@ -1264,7 +1260,7 @@ func TestMaxHostsPerLine_HostLookupAcrossLines(t *testing.T) {
 		if !found {
 			t.Errorf("Host %s not found", hostname)
 		}
-		if addr != "127.0.0.1" {
+		if addr != testIPv4Localhost {
 			t.Errorf("Host %s has wrong address: %s", hostname, addr)
 		}
 	}
@@ -1281,27 +1277,27 @@ func TestMaxHostsPerLine_ReassignHostAcrossLines(t *testing.T) {
 	}
 
 	// Add hosts to first IP
-	hosts.AddHost("127.0.0.1", "hosta")
-	hosts.AddHost("127.0.0.1", "hostb")
-	hosts.AddHost("127.0.0.1", "hostc") // This goes to second line
+	hosts.AddHost(testIPv4Localhost, "hosta")
+	hosts.AddHost(testIPv4Localhost, "hostb")
+	hosts.AddHost(testIPv4Localhost, "hostc") // This goes to second line
 
 	// Verify hostc is at 127.0.0.1
 	found, addr, _ := hosts.HostAddressLookup("hostc", IPFamilyV4)
-	if !found || addr != "127.0.0.1" {
+	if !found || addr != testIPv4Localhost {
 		t.Fatalf("hostc should be at 127.0.0.1, got: found=%v addr=%s", found, addr)
 	}
 
 	// Reassign hostc to different IP
-	hosts.AddHost("192.168.1.1", "hostc")
+	hosts.AddHost(testIPv4Alt, "hostc")
 
 	// Verify hostc is now at 192.168.1.1
 	found, addr, _ = hosts.HostAddressLookup("hostc", IPFamilyV4)
-	if !found || addr != "192.168.1.1" {
+	if !found || addr != testIPv4Alt {
 		t.Errorf("hostc should be at 192.168.1.1, got: found=%v addr=%s", found, addr)
 	}
 
 	// Verify 127.0.0.1 no longer has hostc
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	for _, h := range result {
 		if h == "hostc" {
 			t.Error("hostc should have been removed from 127.0.0.1")
@@ -1320,14 +1316,14 @@ func TestMaxHostsPerLine_AddExistingHostSameIP(t *testing.T) {
 	}
 
 	// Add hosts to create multiple lines
-	hosts.AddHost("127.0.0.1", "hosta")
-	hosts.AddHost("127.0.0.1", "hostb")
-	hosts.AddHost("127.0.0.1", "hostc") // Goes to second line
+	hosts.AddHost(testIPv4Localhost, "hosta")
+	hosts.AddHost(testIPv4Localhost, "hostb")
+	hosts.AddHost(testIPv4Localhost, "hostc") // Goes to second line
 
 	// Try to add hosta again to same IP - should be no-op
-	hosts.AddHost("127.0.0.1", "hosta")
+	hosts.AddHost(testIPv4Localhost, "hosta")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 3 {
 		t.Errorf("Adding existing host should be no-op, got %d hosts: %v", len(result), result)
 	}
@@ -1365,7 +1361,7 @@ func TestMaxHostsPerLine_PreservesExistingLongLines(t *testing.T) {
 	}
 
 	// Adding a new host to this IP should create a new line
-	hosts.AddHost("127.0.0.1", "newhost")
+	hosts.AddHost(testIPv4Localhost, "newhost")
 
 	lines = hosts.GetHostFileLines()
 	// Original long line still exists, plus new line for newhost
@@ -1401,9 +1397,9 @@ func TestMaxHostsPerLine_LimitOfOne(t *testing.T) {
 	}
 
 	// Add 3 hosts
-	hosts.AddHost("127.0.0.1", "hosta")
-	hosts.AddHost("127.0.0.1", "hostb")
-	hosts.AddHost("127.0.0.1", "hostc")
+	hosts.AddHost(testIPv4Localhost, "hosta")
+	hosts.AddHost(testIPv4Localhost, "hostb")
+	hosts.AddHost(testIPv4Localhost, "hostc")
 
 	// Should have 3 separate lines
 	lines := hosts.GetHostFileLines()
@@ -1463,11 +1459,11 @@ func TestMaxHostsPerLine_RenderHostsFile(t *testing.T) {
 	}
 
 	// Add 5 hosts
-	hosts.AddHost("127.0.0.1", "host1")
-	hosts.AddHost("127.0.0.1", "host2")
-	hosts.AddHost("127.0.0.1", "host3")
-	hosts.AddHost("127.0.0.1", "host4")
-	hosts.AddHost("127.0.0.1", "host5")
+	hosts.AddHost(testIPv4Localhost, "host1")
+	hosts.AddHost(testIPv4Localhost, "host2")
+	hosts.AddHost(testIPv4Localhost, "host3")
+	hosts.AddHost(testIPv4Localhost, "host4")
+	hosts.AddHost(testIPv4Localhost, "host5")
 
 	rendered := hosts.RenderHostsFile()
 	lines := strings.Split(strings.TrimSpace(rendered), "\n")
@@ -1478,7 +1474,7 @@ func TestMaxHostsPerLine_RenderHostsFile(t *testing.T) {
 
 	// Each line should have the IP and hosts
 	for _, line := range lines {
-		if !strings.HasPrefix(line, "127.0.0.1") {
+		if !strings.HasPrefix(line, testIPv4Localhost) {
 			t.Errorf("Line should start with IP: %s", line)
 		}
 	}
@@ -1498,13 +1494,13 @@ func TestMaxHostsPerLine_ThreadSafety(t *testing.T) {
 	iterations := 50
 
 	// Multiple goroutines adding hosts
-	for g := 0; g < 5; g++ {
+	for g := range 5 {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				hostname := "host" + string(rune('a'+goroutineID)) + string(rune('0'+i%10))
-				hosts.AddHost("127.0.0.1", hostname)
+				hosts.AddHost(testIPv4Localhost, hostname)
 			}
 		}(g)
 	}
@@ -1512,7 +1508,7 @@ func TestMaxHostsPerLine_ThreadSafety(t *testing.T) {
 	wg.Wait()
 
 	// Verify no panics or data races (run with -race)
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) == 0 {
 		t.Error("Should have added some hosts")
 	}
@@ -1520,7 +1516,7 @@ func TestMaxHostsPerLine_ThreadSafety(t *testing.T) {
 	// Verify no line exceeds the limit
 	lines := hosts.GetHostFileLines()
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" && len(line.Hostnames) > 3 {
+		if line.Address == testIPv4Localhost && len(line.Hostnames) > 3 {
 			t.Errorf("Line exceeds limit of 3: %d hosts", len(line.Hostnames))
 		}
 	}
@@ -1538,7 +1534,7 @@ func TestGetEffectiveMaxHostsPerLine_NilConfig(t *testing.T) {
 
 	result := h.getEffectiveMaxHostsPerLine()
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		if result != DefaultMaxHostsPerLineWindows {
 			t.Errorf("On Windows with nil config, expected %d, got %d", DefaultMaxHostsPerLineWindows, result)
 		}
@@ -1560,13 +1556,13 @@ func TestMaxHostsPerLine_RemoveHostFromMultiLineIP(t *testing.T) {
 	}
 
 	// Add 4 hosts (creates 2 lines with 2 hosts each)
-	hosts.AddHost("127.0.0.1", "hosta")
-	hosts.AddHost("127.0.0.1", "hostb")
-	hosts.AddHost("127.0.0.1", "hostc")
-	hosts.AddHost("127.0.0.1", "hostd")
+	hosts.AddHost(testIPv4Localhost, "hosta")
+	hosts.AddHost(testIPv4Localhost, "hostb")
+	hosts.AddHost(testIPv4Localhost, "hostc")
+	hosts.AddHost(testIPv4Localhost, "hostd")
 
 	// Verify we have 4 hosts
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 4 {
 		t.Fatalf("Expected 4 hosts, got %d", len(result))
 	}
@@ -1575,7 +1571,7 @@ func TestMaxHostsPerLine_RemoveHostFromMultiLineIP(t *testing.T) {
 	hosts.RemoveHost("hostc")
 
 	// Verify only 3 hosts remain
-	result = hosts.ListHostsByIP("127.0.0.1")
+	result = hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 3 {
 		t.Errorf("After removal, expected 3 hosts, got %d: %v", len(result), result)
 	}
@@ -1610,14 +1606,14 @@ func TestMaxHostsPerLine_KubefwdScenario(t *testing.T) {
 	}
 
 	for _, svc := range services {
-		hosts.AddHost("127.0.0.1", svc)
-		hosts.AddHost("127.0.0.1", svc+".default")
-		hosts.AddHost("127.0.0.1", svc+".default.svc")
-		hosts.AddHost("127.0.0.1", svc+".default.svc.cluster.local")
+		hosts.AddHost(testIPv4Localhost, svc)
+		hosts.AddHost(testIPv4Localhost, svc+".default")
+		hosts.AddHost(testIPv4Localhost, svc+".default.svc")
+		hosts.AddHost(testIPv4Localhost, svc+".default.svc.cluster.local")
 	}
 
 	// Total hosts: 25 * 4 = 100
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 100 {
 		t.Errorf("Expected 100 hosts, got %d", len(result))
 	}
@@ -1625,7 +1621,7 @@ func TestMaxHostsPerLine_KubefwdScenario(t *testing.T) {
 	// Verify no line exceeds 9 hosts
 	lines := hosts.GetHostFileLines()
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" && len(line.Hostnames) > 9 {
+		if line.Address == testIPv4Localhost && len(line.Hostnames) > 9 {
 			t.Errorf("Line has %d hosts, exceeds Windows limit of 9", len(line.Hostnames))
 		}
 	}
@@ -1633,7 +1629,7 @@ func TestMaxHostsPerLine_KubefwdScenario(t *testing.T) {
 	// Should have ceiling(100/9) = 12 lines
 	ip127Lines := 0
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" {
+		if line.Address == testIPv4Localhost {
 			ip127Lines++
 		}
 	}
@@ -1655,7 +1651,7 @@ func TestAddHostWithComment_Basic(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHostWithComment("127.0.0.1", "myhost", "added-by-ORG")
+	hosts.AddHostWithComment(testIPv4Localhost, "myhost", "added-by-ORG")
 
 	rendered := hosts.RenderHostsFile()
 	if !strings.Contains(rendered, "myhost") {
@@ -1677,8 +1673,8 @@ func TestAddHostWithComment_EmptyComment(t *testing.T) {
 	}
 
 	// Empty comment should work like AddHost
-	hosts.AddHostWithComment("127.0.0.1", "host1", "")
-	hosts.AddHost("127.0.0.1", "host2")
+	hosts.AddHostWithComment(testIPv4Localhost, "host1", "")
+	hosts.AddHost(testIPv4Localhost, "host2")
 
 	// Both should be on the same line (same address, same empty comment)
 	lines := hosts.GetHostFileLines()
@@ -1697,9 +1693,9 @@ func TestAddHostWithComment_SameCommentAppends(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHostWithComment("127.0.0.1", "host1", "my-app")
-	hosts.AddHostWithComment("127.0.0.1", "host2", "my-app")
-	hosts.AddHostWithComment("127.0.0.1", "host3", "my-app")
+	hosts.AddHostWithComment(testIPv4Localhost, "host1", testCommentMyApp)
+	hosts.AddHostWithComment(testIPv4Localhost, "host2", testCommentMyApp)
+	hosts.AddHostWithComment(testIPv4Localhost, "host3", testCommentMyApp)
 
 	// All should be on the same line
 	lines := hosts.GetHostFileLines()
@@ -1709,7 +1705,7 @@ func TestAddHostWithComment_SameCommentAppends(t *testing.T) {
 	if len(lines[0].Hostnames) != 3 {
 		t.Errorf("Expected 3 hosts on line, got %d", len(lines[0].Hostnames))
 	}
-	if lines[0].Comment != "my-app" {
+	if lines[0].Comment != testCommentMyApp {
 		t.Errorf("Expected comment 'my-app', got '%s'", lines[0].Comment)
 	}
 }
@@ -1721,8 +1717,8 @@ func TestAddHostWithComment_DifferentCommentCreatesNewLine(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHostWithComment("127.0.0.1", "host1", "app-a")
-	hosts.AddHostWithComment("127.0.0.1", "host2", "app-b")
+	hosts.AddHostWithComment(testIPv4Localhost, "host1", "app-a")
+	hosts.AddHostWithComment(testIPv4Localhost, "host2", "app-b")
 
 	// Should be on different lines due to different comments
 	lines := hosts.GetHostFileLines()
@@ -1747,9 +1743,9 @@ func TestAddHostWithComment_MixedWithAddHost(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHost("127.0.0.1", "host1")                      // no comment
-	hosts.AddHostWithComment("127.0.0.1", "host2", "my-app") // with comment
-	hosts.AddHost("127.0.0.1", "host3")                      // no comment - should join host1
+	hosts.AddHost(testIPv4Localhost, "host1")                              // no comment
+	hosts.AddHostWithComment(testIPv4Localhost, "host2", testCommentMyApp) // with comment
+	hosts.AddHost(testIPv4Localhost, "host3")                              // no comment - should join host1
 
 	lines := hosts.GetHostFileLines()
 	if len(lines) != 2 {
@@ -1763,7 +1759,7 @@ func TestAddHostWithComment_MixedWithAddHost(t *testing.T) {
 				t.Errorf("Line without comment should have 2 hosts, got %d", len(line.Hostnames))
 			}
 		}
-		if line.Comment == "my-app" {
+		if line.Comment == testCommentMyApp {
 			if len(line.Hostnames) != 1 {
 				t.Errorf("Line with comment should have 1 host, got %d", len(line.Hostnames))
 			}
@@ -1778,7 +1774,7 @@ func TestAddHostsWithComment_Basic(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHostsWithComment("127.0.0.1", []string{"host1", "host2", "host3"}, "bulk-add")
+	hosts.AddHostsWithComment(testIPv4Localhost, []string{"host1", "host2", "host3"}, "bulk-add")
 
 	lines := hosts.GetHostFileLines()
 	if len(lines) != 1 {
@@ -1803,8 +1799,8 @@ func TestAddHostWithComment_RespectsMaxHostsPerLine(t *testing.T) {
 	}
 
 	// Add 5 hosts with same comment
-	for i := 0; i < 5; i++ {
-		hosts.AddHostWithComment("127.0.0.1", "host"+string(rune('a'+i)), "my-app")
+	for i := range 5 {
+		hosts.AddHostWithComment(testIPv4Localhost, "host"+string(rune('a'+i)), testCommentMyApp)
 	}
 
 	// Should have 3 lines (2, 2, 1)
@@ -1815,7 +1811,7 @@ func TestAddHostWithComment_RespectsMaxHostsPerLine(t *testing.T) {
 
 	// All lines should have the same comment
 	for _, line := range lines {
-		if line.Comment != "my-app" {
+		if line.Comment != testCommentMyApp {
 			t.Errorf("Expected comment 'my-app', got '%s'", line.Comment)
 		}
 	}
@@ -1836,7 +1832,7 @@ func TestAddHostWithComment_PreservesExistingComments(t *testing.T) {
 	}
 
 	// Add to same address with same comment
-	hosts.AddHostWithComment("127.0.0.1", "newhost", "existing-comment")
+	hosts.AddHostWithComment(testIPv4Localhost, "newhost", "existing-comment")
 
 	lines := hosts.GetHostFileLines()
 	if len(lines) != 1 {
@@ -1847,7 +1843,7 @@ func TestAddHostWithComment_PreservesExistingComments(t *testing.T) {
 	}
 
 	// Add with different comment
-	hosts.AddHostWithComment("127.0.0.1", "anotherhost", "new-comment")
+	hosts.AddHostWithComment(testIPv4Localhost, "anotherhost", "new-comment")
 
 	lines = hosts.GetHostFileLines()
 	if len(lines) != 2 {
@@ -1862,12 +1858,12 @@ func TestAddHostWithComment_Rendered(t *testing.T) {
 		t.Fatalf("Failed to create hosts: %v", err)
 	}
 
-	hosts.AddHostWithComment("127.0.0.1", "myservice", "managed-by-kubefwd")
+	hosts.AddHostWithComment(testIPv4Localhost, "myservice", "managed-by-kubefwd")
 
 	rendered := hosts.RenderHostsFile()
 
 	// Should contain the comment with # prefix
-	expected := "127.0.0.1"
+	expected := testIPv4Localhost
 	if !strings.Contains(rendered, expected) {
 		t.Errorf("Rendered output should contain '%s'", expected)
 	}
@@ -1887,8 +1883,8 @@ func TestAddHostWithComment_WhitespaceHandling(t *testing.T) {
 	}
 
 	// Comments with leading/trailing whitespace should be normalized
-	hosts.AddHostWithComment("127.0.0.1", "host1", "  my-comment  ")
-	hosts.AddHostWithComment("127.0.0.1", "host2", "my-comment")
+	hosts.AddHostWithComment(testIPv4Localhost, "host1", "  my-comment  ")
+	hosts.AddHostWithComment(testIPv4Localhost, "host2", "my-comment")
 
 	// Both should be on the same line (whitespace normalized)
 	lines := hosts.GetHostFileLines()
@@ -1947,9 +1943,9 @@ func TestAddHostWithComment_KubefwdScenario(t *testing.T) {
 		"api-gateway.default", "auth-service.default", "user-service.default",
 	}
 
-	hosts.AddHostsWithComment("127.0.0.1", services, "kubefwd-managed")
+	hosts.AddHostsWithComment(testIPv4Localhost, services, "kubefwd-managed")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 6 {
 		t.Errorf("Expected 6 hosts, got %d", len(result))
 	}
@@ -1957,7 +1953,7 @@ func TestAddHostWithComment_KubefwdScenario(t *testing.T) {
 	// All lines should have the kubefwd comment
 	lines := hosts.GetHostFileLines()
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" && line.Comment != "kubefwd-managed" {
+		if line.Address == testIPv4Localhost && line.Comment != "kubefwd-managed" {
 			t.Errorf("Expected 'kubefwd-managed' comment, got '%s'", line.Comment)
 		}
 	}
@@ -1980,14 +1976,14 @@ func TestAddHostWithComment_ThreadSafety(t *testing.T) {
 	iterations := 50
 
 	// Multiple goroutines adding hosts with comments
-	for g := 0; g < 5; g++ {
+	for g := range 5 {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
 			comment := "goroutine-" + string(rune('0'+goroutineID))
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				hostname := "host" + string(rune('a'+goroutineID)) + string(rune('0'+i%10))
-				hosts.AddHostWithComment("127.0.0.1", hostname, comment)
+				hosts.AddHostWithComment(testIPv4Localhost, hostname, comment)
 			}
 		}(g)
 	}
@@ -1995,7 +1991,7 @@ func TestAddHostWithComment_ThreadSafety(t *testing.T) {
 	wg.Wait()
 
 	// Verify no panics or data races (run with -race)
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) == 0 {
 		t.Error("Should have added some hosts")
 	}
@@ -2009,25 +2005,25 @@ func TestAddHostWithComment_ReassignmentPreservesComment(t *testing.T) {
 	}
 
 	// Add host with comment
-	hosts.AddHostWithComment("127.0.0.1", "myhost", "original-comment")
+	hosts.AddHostWithComment(testIPv4Localhost, "myhost", "original-comment")
 
 	// Reassign to different IP with different comment
-	hosts.AddHostWithComment("192.168.1.1", "myhost", "new-comment")
+	hosts.AddHostWithComment(testIPv4Alt, "myhost", "new-comment")
 
 	// Host should be at new IP
 	found, addr, _ := hosts.HostAddressLookup("myhost", IPFamilyV4)
-	if !found || addr != "192.168.1.1" {
+	if !found || addr != testIPv4Alt {
 		t.Errorf("Host should be at 192.168.1.1, got %s", addr)
 	}
 
 	// Old IP should have no hosts
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 0 {
 		t.Errorf("Old IP should have no hosts, got %d", len(result))
 	}
 }
 
-// TestListHostsByComment tests listing hosts by their comment
+// TestListHostsByComment tests listing hosts by their comment.
 func TestListHostsByComment(t *testing.T) {
 	hostsData := `127.0.0.1        localhost
 127.0.0.1        app1 app2 # dev services
@@ -2067,7 +2063,7 @@ func TestListHostsByComment(t *testing.T) {
 	}
 }
 
-// TestRemoveByComment tests removing all entries by comment
+// TestRemoveByComment tests removing all entries by comment.
 func TestRemoveByComment(t *testing.T) {
 	hostsData := `127.0.0.1        localhost
 127.0.0.1        app1 app2 # dev services
@@ -2101,7 +2097,7 @@ func TestRemoveByComment(t *testing.T) {
 	}
 }
 
-// TestRemoveByCommentEmpty tests removing entries with no comment
+// TestRemoveByCommentEmpty tests removing entries with no comment.
 func TestRemoveByCommentEmpty(t *testing.T) {
 	hostsData := `127.0.0.1        localhost
 127.0.0.1        app1 # dev services
@@ -2127,7 +2123,7 @@ func TestRemoveByCommentEmpty(t *testing.T) {
 	}
 }
 
-// TestListHostsByComment_WhitespaceHandling tests that whitespace in comments is handled correctly
+// TestListHostsByComment_WhitespaceHandling tests that whitespace in comments is handled correctly.
 func TestListHostsByComment_WhitespaceHandling(t *testing.T) {
 	hostsData := `127.0.0.1        app1 # dev services
 127.0.0.1        app2 #   dev services
@@ -2151,7 +2147,7 @@ func TestListHostsByComment_WhitespaceHandling(t *testing.T) {
 	}
 }
 
-// TestMaxHostsPerLine_Windows9Limit tests the actual Windows 9 host limit scenario
+// TestMaxHostsPerLine_Windows9Limit tests the actual Windows 9 host limit scenario.
 func TestMaxHostsPerLine_Windows9Limit(t *testing.T) {
 	input := ""
 	hosts, err := NewHosts(&HostsConfig{
@@ -2164,14 +2160,14 @@ func TestMaxHostsPerLine_Windows9Limit(t *testing.T) {
 
 	// Add 20 hosts to same IP (should create 3 lines: 9+9+2)
 	for i := 1; i <= 20; i++ {
-		hosts.AddHost("127.0.0.1", fmt.Sprintf("svc%d", i))
+		hosts.AddHost(testIPv4Localhost, fmt.Sprintf("svc%d", i))
 	}
 
 	// Count the lines with this address
 	lines := hosts.GetHostFileLines()
 	addressLines := 0
 	for _, line := range lines {
-		if line.Address == "127.0.0.1" {
+		if line.Address == testIPv4Localhost {
 			addressLines++
 			// Each line should have at most 9 hosts
 			if len(line.Hostnames) > 9 {
@@ -2186,13 +2182,13 @@ func TestMaxHostsPerLine_Windows9Limit(t *testing.T) {
 	}
 
 	// Verify all hosts are there
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 20 {
 		t.Errorf("Expected 20 hosts, got %d", len(result))
 	}
 }
 
-// TestRemoveByComment_WhitespaceHandling tests whitespace handling in RemoveByComment
+// TestRemoveByComment_WhitespaceHandling tests whitespace handling in RemoveByComment.
 func TestRemoveByComment_WhitespaceHandling(t *testing.T) {
 	hostsData := `127.0.0.1        app1 #   spaced comment
 `
@@ -2204,13 +2200,13 @@ func TestRemoveByComment_WhitespaceHandling(t *testing.T) {
 	// Remove with untrimmed query should still work
 	hosts.RemoveByComment("  spaced comment  ")
 
-	result := hosts.ListHostsByIP("127.0.0.1")
+	result := hosts.ListHostsByIP(testIPv4Localhost)
 	if len(result) != 0 {
 		t.Errorf("Expected 0 hosts after removal, got %d", len(result))
 	}
 }
 
-// TestRemoveByComments tests removing entries by multiple comments
+// TestRemoveByComments tests removing entries by multiple comments.
 func TestRemoveByComments(t *testing.T) {
 	hostsData := `127.0.0.1        localhost
 127.0.0.1        app1 # dev services
