@@ -56,10 +56,10 @@ linters:
       check-type-assertions: true
 
     gocyclo:
-      min-complexity: 15
+      min-complexity: 10
 
     gocognit:
-      min-complexity: 20
+      min-complexity: 15
 
     govet:
       disable:
@@ -170,27 +170,14 @@ linters:
           disabled: true
         - name: confusing-naming
         - name: confusing-results
+        - name: argument-limit
+          arguments:
+            - 5
 
   exclusions:
     generated: lax
     warn-unused: true
     rules:
-      # Relax rules for tests
-      - path: _test\.go
-        linters:
-          - errcheck
-          - gocritic
-          - gocognit
-          - gocyclo
-          - unparam
-          - wrapcheck
-          - revive
-          - goconst
-          - gosec
-          - modernize
-          - godot
-          - prealloc
-
       # Allow longer functions in cmd/
       - path: cmd/
         linters:
