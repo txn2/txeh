@@ -19,9 +19,10 @@ help:
 	@echo "  lint-fix         - Run linters with auto-fix"
 	@echo "  fmt              - Format code"
 	@echo "  coverage         - Generate coverage report"
+	@echo "  coverage-check   - Enforce 80% coverage threshold"
 	@echo "  security         - Run security scans"
-	@echo "  verify           - Quick verification (unit tests)"
-	@echo "  verify-full      - Full verification (all tests)"
+	@echo "  verify           - Full verification (fmt, lint, test, security, coverage gate)"
+	@echo "  verify-full      - Extended verification (adds dead-code analysis)"
 	@echo "  deps             - Download and verify dependencies"
 	@echo "  update           - Update dependencies"
 	@echo "  image            - Build Docker image"
@@ -77,20 +78,31 @@ coverage:
 	go tool cover -html=coverage.out -o coverage.html
 	@go tool cover -func=coverage.out | grep total
 
+.PHONY: coverage-check
+coverage-check:
+	@go test -race -coverprofile=coverage.out ./... > /dev/null 2>&1
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
+	echo "Coverage: $${COVERAGE}%"; \
+	if [ $$(echo "$${COVERAGE} < 80" | bc -l) -eq 1 ]; then \
+		echo "FAIL: Coverage $${COVERAGE}% is below 80% threshold"; \
+		exit 1; \
+	fi; \
+	echo "OK: Coverage meets 80% threshold"
+
 .PHONY: security
 security:
 	gosec ./...
 	govulncheck ./...
 
 .PHONY: verify
-verify: fmt lint test-unit security
+verify: fmt lint test-unit security coverage-check
 	go mod verify
 	@echo "All checks passed"
 
 .PHONY: verify-full
-verify-full: fmt lint test security
+verify-full: fmt lint test security coverage-check dead-code
 	go mod verify
-	@echo "All checks (including integration) passed"
+	@echo "All checks (including integration and dead-code) passed"
 
 .PHONY: deps
 deps:
@@ -141,7 +153,7 @@ dead-code:
 
 .PHONY: mutate
 mutate:
-	gremlins unleash --threshold 60 ./...
+	gremlins unleash --threshold-efficacy 60
 
 .PHONY: check
 check:
