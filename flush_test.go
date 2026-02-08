@@ -6,10 +6,38 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
+	"sync"
 	"testing"
 )
 
-func TestFlushError_Error(t *testing.T) {
+// cmdRecord captures a single call to execCommandFunc.
+type cmdRecord struct {
+	Name string
+	Args []string
+}
+
+// mockExec returns a mock execCommandFunc that records every call and
+// runs exitCmd (e.g. "true" or "false") instead of the real binary.
+// The returned slice is append-safe across calls.
+func mockExec(exitCmd string) (func(string, ...string) *exec.Cmd, *[]cmdRecord, *sync.Mutex) {
+	var mu sync.Mutex
+	var calls []cmdRecord
+	fn := func(name string, args ...string) *exec.Cmd {
+		mu.Lock()
+		calls = append(calls, cmdRecord{Name: name, Args: args})
+		mu.Unlock()
+		return exec.CommandContext(context.Background(), exitCmd) //nolint:gosec // test helper
+	}
+	return fn, &calls, &mu
+}
+
+// --- FlushError acceptance criteria ---
+
+// Given a FlushError with Platform="darwin", Command="dscacheutil -flushcache", Err="exit status 1"
+// When Error() is called
+// Then the string is exactly "flush DNS cache on darwin (dscacheutil -flushcache): exit status 1".
+func TestFlushError_Error_ExactFormat(t *testing.T) {
 	t.Parallel()
 
 	fe := &FlushError{
@@ -21,33 +49,53 @@ func TestFlushError_Error(t *testing.T) {
 	want := "flush DNS cache on darwin (dscacheutil -flushcache): exit status 1"
 	got := fe.Error()
 	if got != want {
-		t.Errorf("FlushError.Error() = %q, want %q", got, want)
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
-func TestFlushError_Unwrap(t *testing.T) {
+// Given a FlushError with an empty Command field
+// When Error() is called
+// Then the parentheses are still present but empty.
+func TestFlushError_Error_EmptyCommand(t *testing.T) {
 	t.Parallel()
 
-	inner := fmt.Errorf("something broke")
 	fe := &FlushError{
-		Platform: "linux",
-		Command:  "resolvectl flush-caches",
-		Err:      inner,
+		Platform: "freebsd",
+		Command:  "",
+		Err:      fmt.Errorf("unsupported platform"),
 	}
 
-	if !errors.Is(fe, inner) {
-		t.Error("errors.Is should find the inner error via Unwrap")
+	want := "flush DNS cache on freebsd (): unsupported platform"
+	got := fe.Error()
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
-func TestFlushError_ErrorsAs(t *testing.T) {
+// Given a FlushError wrapping a sentinel error
+// When checked with errors.Is
+// Then the sentinel is found through Unwrap.
+func TestFlushError_Unwrap_ErrorsIs(t *testing.T) {
 	t.Parallel()
 
-	inner := fmt.Errorf("cmd failed")
+	sentinel := fmt.Errorf("inner cause")
+	fe := &FlushError{Platform: "linux", Command: "resolvectl flush-caches", Err: sentinel}
+
+	if !errors.Is(fe, sentinel) {
+		t.Error("errors.Is should find the inner sentinel through Unwrap")
+	}
+}
+
+// Given a *FlushError stored as an error interface
+// When checked with errors.As
+// Then it extracts the *FlushError with correct Platform and Command fields.
+func TestFlushError_ErrorsAs_ExtractsFields(t *testing.T) {
+	t.Parallel()
+
 	var err error = &FlushError{
 		Platform: "windows",
 		Command:  "ipconfig /flushdns",
-		Err:      inner,
+		Err:      fmt.Errorf("access denied"),
 	}
 
 	var fe *FlushError
@@ -62,22 +110,11 @@ func TestFlushError_ErrorsAs(t *testing.T) {
 	}
 }
 
-func TestFlushError_EmptyCommand(t *testing.T) {
-	t.Parallel()
+// --- joinArgs acceptance criteria ---
 
-	fe := &FlushError{
-		Platform: "freebsd",
-		Command:  "",
-		Err:      fmt.Errorf("unsupported platform"),
-	}
-
-	want := "flush DNS cache on freebsd (): unsupported platform"
-	got := fe.Error()
-	if got != want {
-		t.Errorf("FlushError.Error() = %q, want %q", got, want)
-	}
-}
-
+// Given various command + args combinations
+// When joinArgs is called
+// Then the output matches the exact expected string.
 func TestJoinArgs(t *testing.T) {
 	t.Parallel()
 
@@ -87,24 +124,10 @@ func TestJoinArgs(t *testing.T) {
 		args []string
 		want string
 	}{
-		{
-			name: "no args",
-			cmd:  "dscacheutil",
-			args: nil,
-			want: "dscacheutil",
-		},
-		{
-			name: "single arg",
-			cmd:  "dscacheutil",
-			args: []string{"-flushcache"},
-			want: "dscacheutil -flushcache",
-		},
-		{
-			name: "multiple args",
-			cmd:  "killall",
-			args: []string{"-HUP", "mDNSResponder"},
-			want: "killall -HUP mDNSResponder",
-		},
+		{name: "no args", cmd: "dscacheutil", args: nil, want: "dscacheutil"},
+		{name: "single arg", cmd: "dscacheutil", args: []string{"-flushcache"}, want: "dscacheutil -flushcache"},
+		{name: "multiple args", cmd: "killall", args: []string{"-HUP", "mDNSResponder"}, want: "killall -HUP mDNSResponder"},
+		{name: "empty args slice", cmd: "ipconfig", args: []string{}, want: "ipconfig"},
 	}
 
 	for _, tc := range tests {
@@ -118,56 +141,141 @@ func TestJoinArgs(t *testing.T) {
 	}
 }
 
-// TestFlushDNSCache_MockSuccess replaces execCommandFunc to simulate a
-// successful flush without running real system commands.
-func TestFlushDNSCache_MockSuccess(t *testing.T) {
+// --- Platform flush command verification (darwin, since tests run on macOS) ---
+
+// Given execCommandFunc is mocked to record calls and succeed
+// When FlushDNSCache() is called on darwin
+// Then exactly 2 commands are invoked:
+//
+//	1st: "dscacheutil" with args ["-flushcache"]
+//	2nd: "killall" with args ["-HUP", "mDNSResponder"]
+//
+// And no error is returned.
+func TestFlushDNSCache_Darwin_CommandsAndArgs(t *testing.T) {
 	origFunc := execCommandFunc
 	defer func() { execCommandFunc = origFunc }()
 
-	// Mock exec.Command to return a command that exits 0.
-	execCommandFunc = func(name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(context.Background(), "true")
-	}
+	fn, calls, mu := mockExec("true")
+	execCommandFunc = fn
 
 	err := FlushDNSCache()
 	if err != nil {
-		t.Errorf("FlushDNSCache() with mock success returned error: %v", err)
+		t.Fatalf("FlushDNSCache() returned error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(*calls) != 2 {
+		t.Fatalf("expected 2 exec calls, got %d: %+v", len(*calls), *calls)
+	}
+
+	// First call: dscacheutil -flushcache
+	first := (*calls)[0]
+	if first.Name != "dscacheutil" {
+		t.Errorf("call[0].Name = %q, want %q", first.Name, "dscacheutil")
+	}
+	wantArgs := []string{"-flushcache"}
+	if strings.Join(first.Args, " ") != strings.Join(wantArgs, " ") {
+		t.Errorf("call[0].Args = %v, want %v", first.Args, wantArgs)
+	}
+
+	// Second call: killall -HUP mDNSResponder
+	second := (*calls)[1]
+	if second.Name != "killall" {
+		t.Errorf("call[1].Name = %q, want %q", second.Name, "killall")
+	}
+	wantArgs2 := []string{"-HUP", "mDNSResponder"}
+	if strings.Join(second.Args, " ") != strings.Join(wantArgs2, " ") {
+		t.Errorf("call[1].Args = %v, want %v", second.Args, wantArgs2)
 	}
 }
 
-// TestFlushDNSCache_MockFailure replaces execCommandFunc to simulate a
-// failed flush and verifies the returned error type.
-func TestFlushDNSCache_MockFailure(t *testing.T) {
+// Given execCommandFunc is mocked to fail (exit 1)
+// When FlushDNSCache() is called on darwin
+// Then a *FlushError is returned with Platform="darwin"
+// And Command="dscacheutil -flushcache"
+// And only 1 command was attempted (killall is not reached).
+func TestFlushDNSCache_Darwin_FirstCommandFails(t *testing.T) {
 	origFunc := execCommandFunc
 	defer func() { execCommandFunc = origFunc }()
 
-	// Mock exec.Command to return a command that exits 1.
-	execCommandFunc = func(name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(context.Background(), "false")
-	}
+	fn, calls, mu := mockExec("false")
+	execCommandFunc = fn
 
 	err := FlushDNSCache()
 	if err == nil {
-		t.Fatal("FlushDNSCache() with mock failure should return error")
+		t.Fatal("expected error when dscacheutil fails")
 	}
 
 	var fe *FlushError
 	if !errors.As(err, &fe) {
-		t.Errorf("Expected *FlushError, got %T: %v", err, err)
+		t.Fatalf("expected *FlushError, got %T: %v", err, err)
+	}
+
+	if fe.Platform != "darwin" {
+		t.Errorf("Platform = %q, want %q", fe.Platform, "darwin")
+	}
+	if fe.Command != "dscacheutil -flushcache" {
+		t.Errorf("Command = %q, want %q", fe.Command, "dscacheutil -flushcache")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Only dscacheutil should have been attempted. killall should not run.
+	if len(*calls) != 1 {
+		t.Errorf("expected 1 exec call (dscacheutil only), got %d: %+v", len(*calls), *calls)
 	}
 }
 
-// TestSaveAs_AutoFlush_True verifies that SaveAs calls FlushDNSCache when
-// AutoFlush is true.
-func TestSaveAs_AutoFlush_True(t *testing.T) {
+// Given execCommandFunc where dscacheutil succeeds but killall fails
+// When FlushDNSCache() is called
+// Then no error is returned (killall failure is non-fatal).
+func TestFlushDNSCache_Darwin_KillallFails_NonFatal(t *testing.T) {
 	origFunc := execCommandFunc
 	defer func() { execCommandFunc = origFunc }()
 
-	flushCalled := false
+	callCount := 0
+	var mu sync.Mutex
 	execCommandFunc = func(name string, args ...string) *exec.Cmd {
-		flushCalled = true
-		return exec.CommandContext(context.Background(), "true")
+		mu.Lock()
+		callCount++
+		n := callCount
+		mu.Unlock()
+
+		if n == 1 {
+			// dscacheutil succeeds
+			return exec.CommandContext(context.Background(), "true") //nolint:gosec // test
+		}
+		// killall fails
+		return exec.CommandContext(context.Background(), "false") //nolint:gosec // test
 	}
+
+	err := FlushDNSCache()
+	if err != nil {
+		t.Errorf("killall failure should be non-fatal, got error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if callCount != 2 {
+		t.Errorf("expected 2 exec calls, got %d", callCount)
+	}
+}
+
+// --- SaveAs + AutoFlush integration ---
+
+// Given a Hosts instance with AutoFlush=true and a mocked exec
+// When Save() is called
+// Then the file is written to disk
+// And FlushDNSCache is invoked (execCommandFunc is called).
+func TestSaveAs_AutoFlush_True_FileWrittenAndFlushCalled(t *testing.T) {
+	origFunc := execCommandFunc
+	defer func() { execCommandFunc = origFunc }()
+
+	fn, calls, mu := mockExec("true")
+	execCommandFunc = fn
 
 	tmpFile, err := os.CreateTemp("", "hosts_flush_test_*")
 	if err != nil {
@@ -187,27 +295,37 @@ func TestSaveAs_AutoFlush_True(t *testing.T) {
 	}
 
 	hosts.AddHost("192.168.1.1", "testhost")
-	err = hosts.Save()
-	if err != nil {
+	if err := hosts.Save(); err != nil {
 		t.Fatalf("Save() returned error: %v", err)
 	}
 
-	if !flushCalled {
-		t.Error("AutoFlush=true should have triggered FlushDNSCache")
+	// Verify file was actually written.
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "testhost") {
+		t.Error("file should contain 'testhost' after Save()")
+	}
+
+	// Verify flush was called.
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*calls) == 0 {
+		t.Error("AutoFlush=true: expected at least 1 exec call, got 0")
 	}
 }
 
-// TestSaveAs_AutoFlush_False verifies that SaveAs does NOT call FlushDNSCache
-// when AutoFlush is false (default).
-func TestSaveAs_AutoFlush_False(t *testing.T) {
+// Given a Hosts instance with AutoFlush=false and a mocked exec
+// When Save() is called
+// Then the file is written to disk
+// And execCommandFunc is never called.
+func TestSaveAs_AutoFlush_False_FileWrittenNoFlush(t *testing.T) {
 	origFunc := execCommandFunc
 	defer func() { execCommandFunc = origFunc }()
 
-	flushCalled := false
-	execCommandFunc = func(name string, args ...string) *exec.Cmd {
-		flushCalled = true
-		return exec.CommandContext(context.Background(), "true")
-	}
+	fn, calls, mu := mockExec("true")
+	execCommandFunc = fn
 
 	tmpFile, err := os.CreateTemp("", "hosts_flush_test_*")
 	if err != nil {
@@ -227,25 +345,37 @@ func TestSaveAs_AutoFlush_False(t *testing.T) {
 	}
 
 	hosts.AddHost("192.168.1.1", "testhost")
-	err = hosts.Save()
-	if err != nil {
+	if err := hosts.Save(); err != nil {
 		t.Fatalf("Save() returned error: %v", err)
 	}
 
-	if flushCalled {
-		t.Error("AutoFlush=false should not trigger FlushDNSCache")
+	// Verify file was written.
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "testhost") {
+		t.Error("file should contain 'testhost' after Save()")
+	}
+
+	// Verify flush was NOT called.
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*calls) != 0 {
+		t.Errorf("AutoFlush=false: expected 0 exec calls, got %d", len(*calls))
 	}
 }
 
-// TestSaveAs_AutoFlush_Error verifies that a flush failure is returned
-// as a *FlushError from Save().
-func TestSaveAs_AutoFlush_Error(t *testing.T) {
+// Given AutoFlush=true and a mock that fails
+// When Save() is called
+// Then it returns a *FlushError (not a write error)
+// And the file was still written successfully (flush happens after write).
+func TestSaveAs_AutoFlush_FlushFails_FileStillWritten(t *testing.T) {
 	origFunc := execCommandFunc
 	defer func() { execCommandFunc = origFunc }()
 
-	execCommandFunc = func(name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(context.Background(), "false")
-	}
+	fn, _, _ := mockExec("false")
+	execCommandFunc = fn
 
 	tmpFile, err := os.CreateTemp("", "hosts_flush_test_*")
 	if err != nil {
@@ -266,12 +396,53 @@ func TestSaveAs_AutoFlush_Error(t *testing.T) {
 
 	hosts.AddHost("192.168.1.1", "testhost")
 	err = hosts.Save()
+
+	// Should get an error.
 	if err == nil {
-		t.Fatal("Save() with failing flush should return error")
+		t.Fatal("expected error from Save() when flush fails")
 	}
 
+	// Error should be *FlushError, not a write error.
 	var fe *FlushError
 	if !errors.As(err, &fe) {
-		t.Errorf("Expected *FlushError from Save(), got %T: %v", err, err)
+		t.Fatalf("expected *FlushError, got %T: %v", err, err)
+	}
+
+	// File should still have been written (flush happens after write).
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "testhost") {
+		t.Error("file should contain 'testhost' even when flush fails (write happens first)")
+	}
+}
+
+// Given a Hosts instance created with RawText (no file)
+// When AutoFlush is set
+// Then Save() still returns the "cannot call Save with RawText" error, not a flush error.
+func TestSaveAs_AutoFlush_RawText_ReturnsWriteError(t *testing.T) {
+	raw := "127.0.0.1 localhost\n"
+	hosts, err := NewHosts(&HostsConfig{
+		RawText:   &raw,
+		AutoFlush: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = hosts.Save()
+	if err == nil {
+		t.Fatal("expected error from Save() with RawText")
+	}
+
+	// Should be a plain error, not a *FlushError.
+	var fe *FlushError
+	if errors.As(err, &fe) {
+		t.Error("RawText Save error should not be *FlushError")
+	}
+
+	if !strings.Contains(err.Error(), "RawText") {
+		t.Errorf("expected RawText error message, got: %v", err)
 	}
 }
