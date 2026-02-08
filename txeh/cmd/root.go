@@ -47,6 +47,8 @@ var (
 	Quiet bool
 	// DryRun sends output to STDOUT (ignores quiet).
 	DryRun bool
+	// Flush triggers a DNS cache flush after writing the hosts file.
+	Flush bool
 	// MaxHostsPerLine limits hostnames per line (0=auto, -1=unlimited, >0=explicit).
 	MaxHostsPerLine int
 
@@ -59,6 +61,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&Quiet, "quiet", "q", false, "no output")
 	rootCmd.PersistentFlags().StringVarP(&HostsFileReadPath, "read", "r", "", "(override) Path to read /etc/hosts file.")
 	rootCmd.PersistentFlags().StringVarP(&HostsFileWritePath, "write", "w", "", "(override) Path to write /etc/hosts file.")
+	rootCmd.PersistentFlags().BoolVarP(&Flush, "flush", "f", false, "flush DNS cache after modifying hosts file")
 	rootCmd.PersistentFlags().IntVarP(&MaxHostsPerLine, "max-hosts-per-line", "m", 0, "Max hostnames per line (0=auto, -1=unlimited, >0=explicit). Auto uses 9 on Windows.")
 
 	// validate hostnames (allow underscore for service records)
@@ -114,18 +117,23 @@ func emptyFilePaths() bool {
 }
 
 func initEtcHosts() {
+	if os.Getenv("TXEH_AUTO_FLUSH") == "1" {
+		Flush = true
+	}
+
 	var (
 		hosts *txeh.Hosts
 		err   error
 	)
 
-	if emptyFilePaths() && MaxHostsPerLine == 0 {
+	if emptyFilePaths() && MaxHostsPerLine == 0 && !Flush {
 		hosts, err = txeh.NewHostsDefault()
 	} else {
 		hosts, err = txeh.NewHosts(&txeh.HostsConfig{
 			ReadFilePath:    HostsFileReadPath,
 			WriteFilePath:   HostsFileWritePath,
 			MaxHostsPerLine: MaxHostsPerLine,
+			AutoFlush:       Flush,
 		})
 	}
 
