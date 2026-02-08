@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -64,14 +63,5 @@ func AddHosts(ip string, hosts []string, comment string) {
 		etcHosts.AddHosts(ip, hosts)
 	}
 
-	if DryRun {
-		fmt.Print(etcHosts.RenderHostsFile())
-		return
-	}
-
-	err := etcHosts.Save()
-	if err != nil {
-		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
-		os.Exit(1)
-	}
+	saveHosts()
 }
