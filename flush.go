@@ -9,6 +9,18 @@ import (
 // execCommandFunc is a variable that wraps exec.Command for testability.
 var execCommandFunc = exec.Command
 
+// ExecCommandFunc returns the current exec command function.
+// This is intended for test code that needs to save and restore the original.
+func ExecCommandFunc() func(string, ...string) *exec.Cmd {
+	return execCommandFunc
+}
+
+// SetExecCommandFunc replaces the exec command function.
+// This is intended for test code that needs to mock command execution.
+func SetExecCommandFunc(fn func(string, ...string) *exec.Cmd) {
+	execCommandFunc = fn
+}
+
 // FlushError represents a DNS cache flush failure with platform context.
 type FlushError struct {
 	Platform string
