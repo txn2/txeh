@@ -1,3 +1,4 @@
+// Package cmd implements the txeh command-line interface.
 package cmd
 
 import (
@@ -38,15 +39,15 @@ Read more including usage as a Go library at https://github.com/txn2/txeh`,
 }
 
 var (
-	// HostsFileReadPath specify host file to read
+	// HostsFileReadPath specifies the host file to read.
 	HostsFileReadPath string
-	// HostsFileWritePath specify path to write resulting host file
+	// HostsFileWritePath specifies the path to write the resulting host file.
 	HostsFileWritePath string
-	// Quiet results in no output
+	// Quiet results in no output.
 	Quiet bool
-	// DryRun sends output to STDOUT (ignores quiet)
+	// DryRun sends output to STDOUT (ignores quiet).
 	DryRun bool
-	// MaxHostsPerLine limits hostnames per line (0=auto, -1=unlimited, >0=explicit)
+	// MaxHostsPerLine limits hostnames per line (0=auto, -1=unlimited, >0=explicit).
 	MaxHostsPerLine int
 
 	etcHosts      *txeh.Hosts
@@ -65,7 +66,7 @@ func init() {
 	hostnameRegex = regexp.MustCompile(`^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$`)
 }
 
-func validateCIDRs(cidrs []string) (bool, string) {
+func validateCIDRs(cidrs []string) (ok bool, failed string) {
 	for _, cr := range cidrs {
 		if !validateCIDR(cr) {
 			return false, cr
@@ -80,7 +81,7 @@ func validateCIDR(c string) bool {
 	return err == nil
 }
 
-func validateIPAddresses(ips []string) (bool, string) {
+func validateIPAddresses(ips []string) (ok bool, failed string) {
 	for _, ip := range ips {
 		if !validateIPAddress(ip) {
 			return false, ip
@@ -94,7 +95,7 @@ func validateIPAddress(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
-func validateHostnames(hostnames []string) (bool, string) {
+func validateHostnames(hostnames []string) (ok bool, failed string) {
 	for _, hn := range hostnames {
 		if !validateHostname(hn) {
 			return false, hn
@@ -136,7 +137,7 @@ func initEtcHosts() {
 	etcHosts = hosts
 }
 
-// Execute bootstraps the cobra root command
+// Execute bootstraps the cobra root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
