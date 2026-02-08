@@ -340,6 +340,7 @@ func setupTestHosts(t *testing.T, content string) (path string, cleanup func()) 
 	HostsFileWritePath = tmpFile.Name()
 	DryRun = false
 	Quiet = true
+	Flush = false
 
 	// Initialize etcHosts
 	hosts, err := txeh.NewHosts(&txeh.HostsConfig{
@@ -358,6 +359,7 @@ func setupTestHosts(t *testing.T, content string) (path string, cleanup func()) 
 		HostsFileWritePath = ""
 		DryRun = false
 		Quiet = false
+		Flush = false
 	}
 
 	return tmpFile.Name(), cleanup
@@ -1605,5 +1607,96 @@ func TestVersionCmd_Run(t *testing.T) {
 
 	if !strings.Contains(output, "txeh Version:") {
 		t.Errorf("Expected version output, got: %s", output)
+	}
+}
+
+// =============================================================================
+// Flush Integration Tests
+// =============================================================================
+
+func TestSaveHosts_DryRun_NoFlush(t *testing.T) {
+	_, cleanup := setupTestHosts(t, "127.0.0.1 localhost\n")
+	defer cleanup()
+
+	DryRun = true
+	Flush = true
+
+	// DryRun should print output and skip both save and flush.
+	output := captureOutput(func() {
+		AddHosts("192.168.1.1", []string{"newhost"}, "")
+	})
+
+	if !strings.Contains(output, "newhost") {
+		t.Error("Dry run output should contain 'newhost'")
+	}
+	// "DNS cache flushed." should NOT appear since DryRun prevents Save.
+	if strings.Contains(output, "DNS cache flushed") {
+		t.Error("Dry run should not trigger flush")
+	}
+}
+
+func TestInitEtcHosts_EnvAutoFlush(t *testing.T) {
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origFlush := Flush
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		Flush = origFlush
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 0
+	Flush = false
+
+	t.Setenv("TXEH_AUTO_FLUSH", "1")
+
+	initEtcHosts()
+
+	if !Flush {
+		t.Error("TXEH_AUTO_FLUSH=1 should set Flush to true")
+	}
+}
+
+func TestInitEtcHosts_EnvAutoFlush_NotSet(t *testing.T) {
+	origRead := HostsFileReadPath
+	origWrite := HostsFileWritePath
+	origFlush := Flush
+	origMax := MaxHostsPerLine
+	origHosts := etcHosts
+	defer func() {
+		HostsFileReadPath = origRead
+		HostsFileWritePath = origWrite
+		Flush = origFlush
+		MaxHostsPerLine = origMax
+		etcHosts = origHosts
+	}()
+
+	HostsFileReadPath = ""
+	HostsFileWritePath = ""
+	MaxHostsPerLine = 0
+	Flush = false
+
+	t.Setenv("TXEH_AUTO_FLUSH", "0")
+
+	initEtcHosts()
+
+	if Flush {
+		t.Error("TXEH_AUTO_FLUSH=0 should not set Flush to true")
+	}
+}
+
+func TestFlushFlag_Registered(t *testing.T) {
+	f := rootCmd.PersistentFlags().Lookup("flush")
+	if f == nil {
+		t.Fatal("--flush flag not registered")
+	}
+	if f.Shorthand != "f" {
+		t.Errorf("Expected shorthand 'f', got %q", f.Shorthand)
 	}
 }
