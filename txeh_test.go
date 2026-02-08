@@ -578,7 +578,7 @@ func TestReload_Success(t *testing.T) {
 
 	// Modify the file externally
 	newContent := "127.0.0.1 localhost newhost\n192.168.1.1 server\n"
-	if err := os.WriteFile(tmpFile.Name(), []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(newContent), 0o644); err != nil {
 		t.Fatalf("Failed to update temp file: %v", err)
 	}
 
