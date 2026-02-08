@@ -12,6 +12,7 @@ help:
 	@echo "  build            - Build the Go project"
 	@echo "  test             - Run unit and integration tests"
 	@echo "  test-unit        - Run unit tests only"
+	@echo "  test-short       - Run fast tests (no race detection)"
 	@echo "  test-integration - Run integration tests"
 	@echo "  test-e2e         - Run E2E tests (requires Docker)"
 	@echo "  lint             - Run linters"
@@ -44,6 +45,10 @@ test: test-unit
 .PHONY: test-unit
 test-unit:
 	go test -race -v ./...
+
+.PHONY: test-short
+test-short:
+	go test -short -v ./...
 
 .PHONY: test-integration
 test-integration:
