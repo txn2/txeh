@@ -39,6 +39,14 @@ func (e *FlushError) Unwrap() error {
 }
 
 // FlushDNSCache flushes the operating system's DNS cache.
+//
+// Platform commands (all are OS-provided utilities, not installable dependencies):
+//   - macOS: dscacheutil -flushcache + killall -HUP mDNSResponder (ships with macOS)
+//   - Linux: resolvectl flush-caches (systemd 239+) or systemd-resolve --flush-caches (older systemd).
+//     Returns ErrNoResolver if neither binary is found, which typically means the system
+//     does not cache DNS locally and hosts file changes take effect immediately.
+//   - Windows: ipconfig /flushdns (ships with Windows)
+//
 // Returns a *FlushError on failure, or nil on unsupported platforms
 // where no resolver is detected.
 func FlushDNSCache() error {
