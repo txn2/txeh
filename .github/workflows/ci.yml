@@ -6,24 +6,31 @@ on:
   pull_request:
     branches: [main, master]
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
         with:
           go-version-file: go.mod
+          cache: true
       - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v9.2.0
         with:
-          version: latest
+          version: v2.8.0
           args: --timeout=5m
+          only-new-issues: true
 
   test:
+    name: Test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -32,9 +39,20 @@ jobs:
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run tests
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${COVERAGE}%"
+          if [ "$(echo "$COVERAGE < 80.0" | bc)" -eq 1 ]; then
+            echo "Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
@@ -44,12 +62,16 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
+    name: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Build
         run: go build -v ./...
@@ -58,12 +80,16 @@ jobs:
         run: go mod verify
 
   security:
+    name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5  # v6.2.0
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Run gosec
         uses: securego/gosec@424fc4cd9c82ea0fd6bee9cd49c2db2c3cc0c93f  # v2.22.11
