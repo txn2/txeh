@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+const testBaseHosts = "127.0.0.1 existing\n"
+
+// validateParsedHostLine checks that a parsed HostFileLine has valid type and
+// consistent fields. ADDRESS lines must have a non-empty address and at least
+// one hostname.
+func validateParsedHostLine(t *testing.T, line HostFileLine) {
+	t.Helper()
+	switch line.LineType {
+	case UNKNOWN, EMPTY, COMMENT, ADDRESS:
+		// valid
+	default:
+		t.Errorf("invalid LineType %d", line.LineType)
+	}
+	if line.LineType == ADDRESS {
+		if line.Address == "" {
+			t.Error("ADDRESS line has empty Address")
+		}
+		if len(line.Hostnames) == 0 {
+			t.Error("ADDRESS line has no hostnames")
+		}
+	}
+}
+
 // FuzzParseHostsFromString tests the hosts file parser with arbitrary input.
 // This is the primary attack surface since it handles untrusted file content.
 func FuzzParseHostsFromString(f *testing.F) {
@@ -35,24 +58,9 @@ func FuzzParseHostsFromString(f *testing.F) {
 			return
 		}
 
-		// Every parsed line must have a valid type
+		// Every parsed line must have a valid type.
 		for _, line := range lines {
-			switch line.LineType {
-			case UNKNOWN, EMPTY, COMMENT, ADDRESS:
-				// valid
-			default:
-				t.Errorf("invalid LineType %d", line.LineType)
-			}
-
-			// ADDRESS lines must have a non-empty address and at least one hostname
-			if line.LineType == ADDRESS {
-				if line.Address == "" {
-					t.Error("ADDRESS line has empty Address")
-				}
-				if len(line.Hostnames) == 0 {
-					t.Error("ADDRESS line has no hostnames")
-				}
-			}
+			validateParsedHostLine(t, line)
 		}
 	})
 }
@@ -93,7 +101,7 @@ func FuzzAddHost(f *testing.F) {
 	f.Add("fe80::1", "v6host")
 
 	f.Fuzz(func(t *testing.T, address, hostname string) {
-		base := "127.0.0.1 existing\n"
+		base := testBaseHosts
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatalf("failed to create hosts: %v", err)
@@ -120,7 +128,7 @@ func FuzzAddHostWithComment(f *testing.F) {
 	f.Add("127.0.0.1", "host", "  leading and trailing spaces  ")
 
 	f.Fuzz(func(t *testing.T, address, hostname, comment string) {
-		base := "127.0.0.1 existing\n"
+		base := testBaseHosts
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatalf("failed to create hosts: %v", err)
@@ -289,7 +297,7 @@ func FuzzCombinedOperations(f *testing.F) {
 	f.Add("not-ip", "host", "127.0.0.1", "  ")
 
 	f.Fuzz(func(t *testing.T, addr1, host1, addr2, host2 string) {
-		base := "127.0.0.1 existing\n"
+		base := testBaseHosts
 		hosts, err := NewHosts(&HostsConfig{RawText: &base})
 		if err != nil {
 			t.Fatalf("failed to create hosts: %v", err)
