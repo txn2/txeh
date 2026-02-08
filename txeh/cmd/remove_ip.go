@@ -37,6 +37,7 @@ var removeIPCmd = &cobra.Command{
 	},
 }
 
+// removeIPs removes the given IP addresses from the hosts file.
 func removeIPs(ips []string) {
 	etcHosts.RemoveAddresses(ips)
 
