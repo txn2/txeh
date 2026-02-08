@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -35,15 +34,5 @@ var removeCommentCmd = &cobra.Command{
 // RemoveByComment removes all host entries with the given comment.
 func RemoveByComment(comment string) {
 	etcHosts.RemoveByComment(comment)
-
-	if DryRun {
-		fmt.Print(etcHosts.RenderHostsFile())
-		return
-	}
-
-	err := etcHosts.Save()
-	if err != nil {
-		fmt.Printf("Error: could not save %s. Reason: %s\n", etcHosts.WriteFilePath, err.Error())
-		os.Exit(1)
-	}
+	saveHosts()
 }
