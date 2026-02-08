@@ -54,16 +54,15 @@ type HostsConfig struct {
 
 // Hosts represents a parsed hosts file with thread-safe operations.
 type Hosts struct {
-	sync.Mutex
+	mu sync.Mutex
 	*HostsConfig
 	hostFileLines HostFileLines
 }
 
-// AddressLocations the location of an address in the HFL
+// AddressLocations maps an address to its location in the HFL.
 type AddressLocations map[string]int
 
-// HostLocations maps a hostname
-// to an original line number
+// HostLocations maps a hostname to an original line number.
 type HostLocations map[string]int
 
 // HostFileLines is a slice of HostFileLine entries.
@@ -81,17 +80,16 @@ type HostFileLine struct {
 	Comment         string
 }
 
-// NewHostsDefault returns a hosts object with
-// default configuration
+// NewHostsDefault returns a hosts object with default configuration.
 func NewHostsDefault() (*Hosts, error) {
 	return NewHosts(&HostsConfig{})
 }
 
-// NewHosts returns a new hosts object
+// NewHosts returns a new hosts object.
 func NewHosts(hc *HostsConfig) (*Hosts, error) {
 	h := &Hosts{HostsConfig: hc}
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	defaultHostsFile := "/etc/hosts"
 
@@ -127,24 +125,24 @@ func NewHosts(hc *HostsConfig) (*Hosts, error) {
 	return h, nil
 }
 
-// Save rendered hosts file
+// Save renders and writes the hosts file to the configured write path.
 func (h *Hosts) Save() error {
 	return h.SaveAs(h.WriteFilePath)
 }
 
-// SaveAs saves rendered hosts file to the filename specified
+// SaveAs saves rendered hosts file to the filename specified.
 func (h *Hosts) SaveAs(fileName string) error {
 	if h.RawText != nil {
 		return errors.New("cannot call Save or SaveAs with RawText. Use RenderHostsFile to return a string")
 	}
 	hfData := []byte(h.RenderHostsFile())
 
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	err := os.WriteFile(filepath.Clean(fileName), hfData, 0o644) // #nosec G306 -- hosts file must be world-readable (0644) for DNS resolution
 	if err != nil {
-		return err
+		return fmt.Errorf("write hosts file %s: %w", fileName, err)
 	}
 
 	return nil
@@ -156,8 +154,8 @@ func (h *Hosts) Reload() error {
 	if h.RawText != nil {
 		return errors.New("cannot call Reload with RawText")
 	}
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	hfl, err := ParseHosts(h.ReadFilePath)
 	if err != nil {
@@ -187,8 +185,8 @@ func (h *Hosts) RemoveAddress(address string) {
 
 // RemoveFirstAddress removes the first entry (line) found with the provided address.
 func (h *Hosts) RemoveFirstAddress(address string) bool {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	for hflIdx := range h.hostFileLines {
 		if address == h.hostFileLines[hflIdx].Address {
@@ -212,7 +210,7 @@ func (h *Hosts) RemoveCIDRs(cidrs []string) error {
 	for _, cidr := range cidrs {
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse CIDR %s: %w", cidr, err)
 		}
 
 		hfLines := h.GetHostFileLines()
@@ -232,7 +230,7 @@ func (h *Hosts) RemoveCIDRs(cidrs []string) error {
 	return nil
 }
 
-// RemoveHosts removes all hostname entries of the provided host slice
+// RemoveHosts removes all hostname entries of the provided host slice.
 func (h *Hosts) RemoveHosts(hosts []string) {
 	for _, host := range hosts {
 		if h.RemoveFirstHost(host) {
@@ -241,18 +239,18 @@ func (h *Hosts) RemoveHosts(hosts []string) {
 	}
 }
 
-// RemoveHost removes all hostname entries of provided host
+// RemoveHost removes all hostname entries of provided host.
 func (h *Hosts) RemoveHost(host string) {
 	if h.RemoveFirstHost(host) {
 		h.RemoveHost(host)
 	}
 }
 
-// RemoveFirstHost the first hostname entry found and returns true if successful
+// RemoveFirstHost removes the first hostname entry found and returns true if successful.
 func (h *Hosts) RemoveFirstHost(host string) bool {
 	host = strings.TrimSpace(strings.ToLower(host))
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	for hflIdx := range h.hostFileLines {
 		for hidx, hst := range h.hostFileLines[hflIdx].Hostnames {
@@ -283,8 +281,8 @@ func (h *Hosts) RemoveByComments(comments []string) {
 // RemoveByComment removes all host entries that have the specified comment.
 // This removes entire lines where the comment matches.
 func (h *Hosts) RemoveByComment(comment string) {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	comment = strings.TrimSpace(comment)
 	var newLines HostFileLines
@@ -299,7 +297,7 @@ func (h *Hosts) RemoveByComment(comment string) {
 }
 
 // AddHosts adds an array of hosts to the first matching address it finds
-// or creates the address and adds the hosts
+// or creates the address and adds the hosts.
 func (h *Hosts) AddHosts(address string, hosts []string) {
 	for _, hst := range hosts {
 		h.AddHost(address, hst)
@@ -317,8 +315,8 @@ func (h *Hosts) AddHostsWithComment(address string, hosts []string, comment stri
 }
 
 // AddHost adds a host to an address and removes the host
-// from any existing address is may be associated with
-func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
+// from any existing address it may be associated with.
+func (h *Hosts) AddHost(addressRaw, hostRaw string) {
 	h.addHostWithComment(addressRaw, hostRaw, "")
 }
 
@@ -327,13 +325,13 @@ func (h *Hosts) AddHost(addressRaw string, hostRaw string) {
 // If the address already exists with the same comment, the host is appended to that line
 // (respecting MaxHostsPerLine). If the address exists with a different comment, a new line
 // is created with the specified comment.
-func (h *Hosts) AddHostWithComment(addressRaw string, hostRaw string, comment string) {
+func (h *Hosts) AddHostWithComment(addressRaw, hostRaw, comment string) {
 	h.addHostWithComment(addressRaw, hostRaw, comment)
 }
 
 // addHostWithComment is the internal implementation that handles both
 // commented and non-commented host additions.
-func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment string) {
+func (h *Hosts) addHostWithComment(addressRaw, hostRaw, comment string) { //nolint:revive // internal method mirrors public API naming
 	host := strings.TrimSpace(strings.ToLower(hostRaw))
 	address := strings.TrimSpace(strings.ToLower(addressRaw))
 	// Normalize comment: trim spaces, but don't add/remove the # prefix
@@ -349,8 +347,8 @@ func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment st
 		ipFamily = IPFamilyV6
 	}
 
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	// does the host already exist
 	ok, exAdd, hflIdx := h.hostAddressLookupLocked(host, ipFamily)
@@ -388,10 +386,10 @@ func (h *Hosts) addHostWithComment(addressRaw string, hostRaw string, comment st
 	h.hostFileLines = append(h.hostFileLines, hfl)
 }
 
-// ListHostsByIP returns a list of hostnames associated with a given IP address
+// ListHostsByIP returns a list of hostnames associated with a given IP address.
 func (h *Hosts) ListHostsByIP(address string) []string {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	var hosts []string
 
@@ -404,10 +402,10 @@ func (h *Hosts) ListHostsByIP(address string) []string {
 	return hosts
 }
 
-// ListAddressesByHost returns a list of IPs associated with a given hostname
+// ListAddressesByHost returns a list of IPs associated with a given hostname.
 func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	var addresses [][]string
 
@@ -425,10 +423,10 @@ func (h *Hosts) ListAddressesByHost(hostname string, exact bool) [][]string {
 	return addresses
 }
 
-// ListHostsByCIDR returns a list of IPs and hostnames associated with a given CIDR
+// ListHostsByCIDR returns a list of IPs and hostnames associated with a given CIDR.
 func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	var ipHosts [][]string
 
@@ -448,10 +446,10 @@ func (h *Hosts) ListHostsByCIDR(cidr string) [][]string {
 	return ipHosts
 }
 
-// ListHostsByComment returns all hostnames on lines with the given comment
+// ListHostsByComment returns all hostnames on lines with the given comment.
 func (h *Hosts) ListHostsByComment(comment string) []string {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	comment = strings.TrimSpace(comment)
 	var hosts []string
@@ -468,15 +466,15 @@ func (h *Hosts) ListHostsByComment(comment string) []string {
 // HostAddressLookup returns true if the host is found, the address string,
 // and the index of the host file line. This is part of the public API for
 // consumers that need direct address lookups by IP family.
-func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (bool, string, int) {
-	h.Lock()
-	defer h.Unlock()
+func (h *Hosts) HostAddressLookup(host string, ipFamily IPFamily) (found bool, address string, idx int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	return h.hostAddressLookupLocked(host, ipFamily)
 }
 
-// hostAddressLookupLocked is the internal version that assumes the lock is already held
-func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (bool, string, int) {
+// hostAddressLookupLocked is the internal version that assumes the lock is already held.
+func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (found bool, address string, idx int) {
 	host = strings.ToLower(strings.TrimSpace(host))
 
 	for i, hfl := range h.hostFileLines {
@@ -499,22 +497,22 @@ func (h *Hosts) hostAddressLookupLocked(host string, ipFamily IPFamily) (bool, s
 
 // RenderHostsFile returns the hosts file content as a formatted string.
 func (h *Hosts) RenderHostsFile() string {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
-	hf := ""
-
+	var sb strings.Builder
 	for _, hfl := range h.hostFileLines {
-		hf += fmt.Sprintln(lineFormatter(hfl))
+		sb.WriteString(lineFormatter(hfl))
+		sb.WriteByte('\n')
 	}
 
-	return hf
+	return sb.String()
 }
 
 // GetHostFileLines returns a copy of all parsed host file lines.
 func (h *Hosts) GetHostFileLines() HostFileLines {
-	h.Lock()
-	defer h.Unlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	// Return a copy to prevent external modification of internal state
 	result := make(HostFileLines, len(h.hostFileLines))
@@ -554,7 +552,7 @@ func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 func ParseHosts(path string) ([]HostFileLine, error) {
 	input, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read hosts file %s: %w", path, err)
 	}
 	return ParseHostsFromString(string(input))
 }
@@ -619,12 +617,12 @@ func ParseHostsFromString(input string) ([]HostFileLine, error) {
 	return hostFileLines, nil
 }
 
-// removeStringElement removed an element of a string slice
+// removeStringElement removes an element of a string slice.
 func removeStringElement(slice []string, s int) []string {
 	return append(slice[:s], slice[s+1:]...)
 }
 
-// removeHFLElement removed an element of a HostFileLine slice.
+// removeHFLElement removes an element of a HostFileLine slice.
 func removeHFLElement(slice []HostFileLine, s int) []HostFileLine {
 	return append(slice[:s], slice[s+1:]...)
 }
@@ -649,20 +647,20 @@ func (h *Hosts) removeHostFromLineLocked(hflIdx int, host, newAddress string) {
 	}
 }
 
-// lineFormatter
+// lineFormatter formats a single host file line as a string.
 func lineFormatter(hfl HostFileLine) string {
 	if hfl.LineType < ADDRESS {
 		return hfl.Raw
 	}
 
-	if len(hfl.Comment) > 0 {
+	if hfl.Comment != "" {
 		return fmt.Sprintf("%-16s %s # %s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
 	}
 	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
 }
 
-// IPLocalhost is a regex pattern for IPv4 or IPv6 loopback range.
-const ipLocalhost = `((127\.([0-9]{1,3}\.){2}[0-9]{1,3})|(::1)$)`
+// ipLocalhost is a regex pattern for IPv4 or IPv6 loopback range.
+const ipLocalhost = `((127\.(\d{1,3}\.){2}\d{1,3})|(::1)$)`
 
 var localhostIPRegexp = regexp.MustCompile(ipLocalhost)
 
@@ -670,9 +668,9 @@ func isLocalhost(address string) bool {
 	return localhostIPRegexp.MatchString(address)
 }
 
-// winDefaultHostsFile returns the default hosts file path for Windows
-// it tries to use the SystemRoot environment variable, if that is not set
-// it falls back to C:\Windows\System32\Drivers\etc\hosts
+// winDefaultHostsFile returns the default hosts file path for Windows.
+// It tries to use the SystemRoot environment variable. If that is not set,
+// it falls back to C:\Windows\System32\Drivers\etc\hosts.
 func winDefaultHostsFile() string {
 	if r := os.Getenv("SystemRoot"); r != "" {
 		return filepath.Join(r, "System32", "drivers", "etc", "hosts")
