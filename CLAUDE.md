@@ -27,6 +27,7 @@ make verify-full     # fmt, lint, test, security, go mod verify
 make fmt             # gofmt + goimports
 make lint            # golangci-lint
 make test-unit       # go test -race ./...
+make test-short      # Fast tests (no race detection)
 make coverage        # Coverage report (HTML + summary)
 make security        # gosec + govulncheck
 ```
@@ -97,6 +98,19 @@ func (h *Hosts) Save() error {
 - Use table-driven tests for multiple cases
 - Use `t.Parallel()` for independent tests
 - Race detection required: `go test -race ./...`
+
+### Verification Stack
+
+All changes go through a 4-level verification process before merge:
+
+1. **Static analysis** - `make lint` runs golangci-lint with 30+ linters covering bugs, style, security, and error handling.
+2. **Unit tests** - `make test-unit` runs with `-race`. Coverage must stay above 82% (CI enforces 80% on patches).
+3. **Integration/E2E tests** - Tagged test suites (`-tags=integration`, `-tags=e2e`) for system-level validation.
+4. **Mutation testing** - `make mutate` runs gremlins with a 60% kill rate threshold to verify test quality.
+
+### Acceptance Criteria
+
+Define specs as test assertions before writing code. Each new feature or bug fix should have a corresponding test that would fail without the change. Write the test first, confirm it fails, then implement the fix.
 
 ## Security Requirements
 
