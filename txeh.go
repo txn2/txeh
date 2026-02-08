@@ -27,6 +27,9 @@ const (
 // Windows has a limitation where lines with more than ~9 hostnames may not resolve correctly.
 const DefaultMaxHostsPerLineWindows = 9
 
+// osWindows is the runtime.GOOS value for Windows.
+const osWindows = "windows"
+
 // IPFamily represents the IP address family (IPv4 or IPv6).
 type IPFamily int64
 
@@ -93,7 +96,7 @@ func NewHosts(hc *HostsConfig) (*Hosts, error) {
 
 	defaultHostsFile := "/etc/hosts"
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		defaultHostsFile = winDefaultHostsFile()
 	}
 
@@ -525,7 +528,7 @@ func (h *Hosts) GetHostFileLines() HostFileLines {
 func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 	if h.HostsConfig == nil {
 		// No config, use auto-detect
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == osWindows {
 			return DefaultMaxHostsPerLineWindows
 		}
 		return 0
@@ -542,7 +545,7 @@ func (h *Hosts) getEffectiveMaxHostsPerLine() int {
 	}
 
 	// MaxHostsPerLine == 0: auto-detect based on OS
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		return DefaultMaxHostsPerLineWindows
 	}
 	return 0
