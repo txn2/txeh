@@ -18,3 +18,19 @@
   <meta name="twitter:image" content="{{ config.site_url }}images/logo.png">
   <meta name="twitter:creator" content="@cjimti">
 {% endblock %}
+
+{# Inner-page skip-to-content. The homepage template overrides block header
+   wholesale and includes its own skiplink targeting #main. #}
+{% block header %}
+<a class="skiplink" href="#main">skip to content</a>
+{{ super() }}
+{% endblock %}
+
+{# Inner-page skip target. Material's <main data-md-component="main"> has no
+   id, so we drop a focusable anchor at the top of the content area. The
+   homepage template overrides block container wholesale and sets id="main"
+   on its own <main> element. #}
+{% block content %}
+<a id="main" tabindex="-1" class="skiplink-target" aria-hidden="true"></a>
+{{ super() }}
+{% endblock %}
