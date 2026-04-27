@@ -1,0 +1,381 @@
+{% extends "main.html" %}
+
+{# Mark the body so CSS can target the homepage layout. #}
+{% block htmltitle %}
+  {{ super() }}
+{% endblock %}
+
+{% block site_meta %}
+  {{ super() }}
+  <meta name="page-template" content="home">
+{% endblock %}
+
+{# Replace Material's header with the txn2 rail. #}
+{% block header %}
+<header class="rail" data-md-component="header">
+  <a class="skiplink" href="#main">skip to content</a>
+  <a href="./" class="rail__brand" aria-label="txeh home">
+    <span class="rail__mark" aria-hidden="true">◐</span>
+    <span class="rail__name">txeh</span>
+    <span class="rail__sep" aria-hidden="true">·</span>
+    <span class="rail__sub">/etc/hosts management for go</span>
+  </a>
+  <div class="rail__meta">
+    <span class="rail__rel">v1.8.0</span>
+    <span class="rail__dot" aria-hidden="true">●</span>
+    <span data-clock>·· UTC</span>
+    <span class="rail__dot" aria-hidden="true">●</span>
+    <a href="https://txn2.com" class="rail__org">part of <em class="serif">txn2</em>&nbsp;↗</a>
+  </div>
+  <nav class="rail__nav" aria-label="primary">
+    <a href="./" aria-current="page">home</a>
+    <a href="getting-started/">install</a>
+    <a href="cli/">cli</a>
+    <a href="library/">library</a>
+    <a href="api/">api</a>
+    <a href="https://github.com/txn2/txeh" class="rail__cta">github&nbsp;↗</a>
+  </nav>
+</header>
+{% endblock %}
+
+{# No nav tabs on the homepage. #}
+{% block tabs %}{% endblock %}
+
+{# No announce. #}
+{% block announce %}{% endblock %}
+
+{# Replace the entire content area with the full-bleed homepage. #}
+{% block container %}
+<main id="main" class="page page--home" data-md-component="main">
+
+  {# BLUEPRINT GRID OVERLAY #}
+  <div class="blueprint" aria-hidden="true">
+    <div class="blueprint__grid"></div>
+    <div class="blueprint__crosshair blueprint__crosshair--tl"><span></span><span></span></div>
+    <div class="blueprint__crosshair blueprint__crosshair--tr"><span></span><span></span></div>
+    <div class="blueprint__crosshair blueprint__crosshair--bl"><span></span><span></span></div>
+    <div class="blueprint__crosshair blueprint__crosshair--br"><span></span><span></span></div>
+  </div>
+
+  {# HERO #}
+  <section class="hero">
+    <div class="hero__stamp">
+      <p class="hero__stamp__line">project / txeh</p>
+      <p class="hero__stamp__line">org / txn2</p>
+      <p class="hero__stamp__line">est. 2019</p>
+      <p class="hero__stamp__line"><a href="https://pkg.go.dev/github.com/txn2/txeh">pkg.go.dev&nbsp;↗</a></p>
+      <p class="hero__stamp__line hero__stamp__line--ok">apache 2.0 · cross platform</p>
+    </div>
+
+    <h1 class="hero__display">
+      <span class="hero__row hero__row--1">
+        <em class="serif">txeh</em>
+        <span class="hero__chip">v1.8.0 · go</span>
+      </span>
+      <span class="hero__row hero__row--2">
+        <span class="outline">/etc/hosts</span>
+      </span>
+      <span class="hero__row hero__row--3">
+        <em class="serif">management.</em>
+      </span>
+    </h1>
+
+    <div class="hero__intro">
+      <p class="hero__lede">
+        <span class="dropcap">t</span>xeh manages the <code>/etc/hosts</code> file from Go and from the shell. Add, remove, list, and query hostname-to-IP mappings without hand-editing. Mutex-protected for safe concurrent use, comment-aware so entries from different sources stay separable, and cross-platform across Linux, macOS, and Windows. The library powers <a href="https://kubefwd.com">kubefwd</a>'s per-service hostname resolution and ships as a standalone CLI.
+      </p>
+      <p class="hero__lede hero__lede--muted">
+        IPv4 and IPv6, CIDR-based bulk add and remove, dry-run preview, optional DNS cache flush after writes, and an in-memory mode that operates on raw text instead of a file. Apache 2.0, originally built to support <a href="https://github.com/txn2/kubefwd">kubefwd</a> for Kubernetes service forwarding.
+      </p>
+    </div>
+
+    <aside class="hero__ticker" aria-hidden="true">
+      <div class="ticker">
+        <div class="ticker__track">
+          <span>add &amp; remove hostnames</span><span>·</span>
+          <span>cidr range operations</span><span>·</span>
+          <span>thread-safe</span><span>·</span>
+          <span>ipv4 &amp; ipv6</span><span>·</span>
+          <span>inline comments</span><span>·</span>
+          <span>dry-run preview</span><span>·</span>
+          <span>dns cache flush</span><span>·</span>
+          <span>in-memory mode</span><span>·</span>
+          <span>linux / macos / windows</span><span>·</span>
+          <span>cli + go library</span><span>·</span>
+          <span>powers kubefwd</span><span>·</span>
+          <span>apache 2.0</span><span>·</span>
+          <span>add &amp; remove hostnames</span><span>·</span>
+          <span>cidr range operations</span><span>·</span>
+          <span>thread-safe</span><span>·</span>
+          <span>ipv4 &amp; ipv6</span><span>·</span>
+          <span>inline comments</span><span>·</span>
+          <span>dry-run preview</span><span>·</span>
+          <span>dns cache flush</span><span>·</span>
+          <span>in-memory mode</span><span>·</span>
+          <span>linux / macos / windows</span><span>·</span>
+          <span>cli + go library</span><span>·</span>
+          <span>powers kubefwd</span><span>·</span>
+          <span>apache 2.0</span><span>·</span>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  {# FLAGSHIP / PRIMARY DEMO #}
+  <section class="section section--flagship" id="install">
+    <header class="section__head">
+      <p class="section__index">§ 01 / install · run</p>
+      <h2 class="section__title">
+        Install. Then <em class="serif">use it.</em>
+      </h2>
+      <p class="section__lede">
+        Install with <code>brew</code>, <code>go install</code>, or grab a release binary. Run the CLI with <code>sudo</code> so txeh can write <code>/etc/hosts</code>. Or import the Go library and manage hosts from a service, daemon, or test fixture.
+      </p>
+    </header>
+
+    <div class="flagship">
+      <article class="flagship__card flagship__card--cli">
+        <header class="flagship__head">
+          <p class="flagship__id">CLI-001 · go · <a class="flagship__url" href="cli/">cli reference ↗</a></p>
+          <h3 class="flagship__name">cli mode</h3>
+          <p class="flagship__tag">Add, remove, list, and show entries from the shell.</p>
+        </header>
+        <div class="flagship__body">
+          <p>One binary, no daemons. Add a single hostname, a comma-separated list, or remove a whole CIDR range. Use <code>--dryrun</code> to preview changes, <code>--comment</code> to tag entries by source, and <code>--flush</code> to refresh the DNS cache after writes.</p>
+        </div>
+        <div class="flagship__demo">
+          <div class="terminal">
+            <div class="terminal__bar">
+              <span></span><span></span><span></span>
+              <em>~ / txeh</em>
+            </div>
+<pre class="terminal__body"><span class="t-prompt">$</span> brew install txn2/tap/txeh
+<span class="t-prompt">$</span> sudo txeh add 127.0.0.1 myapp.local
+<span class="t-mute">  + 127.0.0.1 myapp.local</span>
+
+<span class="t-prompt">$</span> txeh list ip 127.0.0.1
+<span class="t-mute">  localhost myapp.local</span>
+
+<span class="t-prompt">$</span> sudo txeh remove host myapp.local --dryrun
+<span class="t-mute"># preview only, no write</span></pre>
+          </div>
+        </div>
+        <footer class="flagship__foot">
+          <a class="btn btn--accent" href="getting-started/">install &amp; run →</a>
+          <a class="btn" href="cli/">cli reference ↗</a>
+          <a class="btn" href="https://github.com/txn2/txeh" aria-label="txeh source on GitHub">source ↗</a>
+        </footer>
+      </article>
+
+      <article class="flagship__card flagship__card--lib">
+        <header class="flagship__head">
+          <p class="flagship__id">LIB-002 · go · <a class="flagship__url" href="library/">library docs ↗</a></p>
+          <h3 class="flagship__name">go library</h3>
+          <p class="flagship__tag">Programmatic hosts file management. Thread-safe.</p>
+        </header>
+        <div class="flagship__body">
+          <p><code>NewHostsDefault()</code> finds the system hosts file and returns a mutex-protected handle. Call <code>AddHost</code>, <code>RemoveHost</code>, or <code>RemoveCIDRs</code> from any goroutine and <code>Save()</code> to write. Or pass <em class="serif">RawText</em> to operate on a string in-memory.</p>
+        </div>
+        <div class="flagship__demo">
+          <div class="terminal">
+            <div class="terminal__bar">
+              <span></span><span></span><span></span>
+              <em>~ / library</em>
+            </div>
+<pre class="terminal__body"><span class="t-prompt">$</span> go get github.com/txn2/txeh
+
+<span class="t-mute">// main.go</span>
+hosts, _ := txeh.NewHostsDefault()
+hosts.AddHost(<span class="t-ok">"127.0.0.1"</span>, <span class="t-ok">"myapp.local"</span>)
+hosts.AddHostWithComment(
+    <span class="t-ok">"10.0.0.1"</span>, <span class="t-ok">"db"</span>, <span class="t-ok">"staging"</span>,
+)
+_ = hosts.Save()</pre>
+          </div>
+        </div>
+        <footer class="flagship__foot">
+          <a class="btn btn--accent" href="library/">library docs →</a>
+          <a class="btn" href="api/">api reference ↗</a>
+          <a class="btn" href="https://pkg.go.dev/github.com/txn2/txeh" aria-label="txeh on pkg.go.dev">pkg.go.dev ↗</a>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+  {# WHAT TXEH DOES / STACK LIST #}
+  <section class="section section--stack" id="features">
+    <header class="section__head">
+      <p class="section__index">§ 02 / what it does</p>
+      <h2 class="section__title">
+        Hosts file as <em class="serif">data</em>. Not a string to grep.
+      </h2>
+      <p class="section__lede">
+        txeh parses the hosts file into a structured representation, mutates it through typed methods, and renders it back without losing comments or formatting.
+      </p>
+    </header>
+
+    <ol class="stack">
+      <li class="stack__row">
+        <span class="stack__num">001</span>
+        <div class="stack__main">
+          <a class="stack__name" href="library/#adding-hosts">add and remove by host, ip, or cidr</a>
+          <p class="stack__desc">Single-host or bulk operations. <code>AddHost</code>, <code>AddHosts</code>, <code>RemoveHost</code>, <code>RemoveAddress</code>, <code>RemoveCIDRs</code>. Operations are idempotent; re-adding a hostname is a no-op.</p>
+        </div>
+        <span class="stack__tag">core</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row">
+        <span class="stack__num">002</span>
+        <div class="stack__main">
+          <a class="stack__name" href="library/#thread-safety">thread-safe by default</a>
+          <p class="stack__desc">All public methods take an internal mutex. Daemons, controllers, and tools that mutate hosts from multiple goroutines (kubefwd among them) can call them directly without external locking.</p>
+        </div>
+        <span class="stack__tag">runtime</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row">
+        <span class="stack__num">003</span>
+        <div class="stack__main">
+          <a class="stack__name" href="library/#inline-comments">inline comments preserved</a>
+          <p class="stack__desc"><code>AddHostWithComment</code> tags entries with a source string. <code>RemoveByComment</code> removes everything tagged with that source. The library re-renders the file without losing any comment or blank line.</p>
+        </div>
+        <span class="stack__tag">format</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row">
+        <span class="stack__num">004</span>
+        <div class="stack__main">
+          <a class="stack__name" href="library/#querying">query by host, ip, or comment</a>
+          <p class="stack__desc"><code>ListAddressesByHost</code>, <code>ListHostsByIP</code>, <code>ListHostsByComment</code>, <code>ListHostsByCIDR</code>. Read-only inspection without parsing or rewriting.</p>
+        </div>
+        <span class="stack__tag">query</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row">
+        <span class="stack__num">005</span>
+        <div class="stack__main">
+          <a class="stack__name" href="cli/#dns-cache-flushing">dns cache flush</a>
+          <p class="stack__desc"><code>--flush</code> on the CLI or <code>TXEH_AUTO_FLUSH=1</code> in the environment runs the OS-native flush command after writes. <code>dscacheutil</code> on macOS, <code>resolvectl</code> on Linux, <code>ipconfig /flushdns</code> on Windows.</p>
+        </div>
+        <span class="stack__tag">dns</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row">
+        <span class="stack__num">006</span>
+        <div class="stack__main">
+          <a class="stack__name" href="library/#from-a-string-in-memory">in-memory mode for tests</a>
+          <p class="stack__desc">Pass <code>RawText</code> to <code>NewHosts</code> and operate on a string. <code>Save()</code> errors as expected (no path); <code>RenderHostsFile()</code> returns the mutated text. Useful in unit tests and ephemeral fixtures.</p>
+        </div>
+        <span class="stack__tag">testing</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+      <li class="stack__row stack__row--more">
+        <span class="stack__num">···</span>
+        <div class="stack__main">
+          <a class="stack__name" href="api/">ipv4 and ipv6, custom paths, dry-run, version stamping</a>
+          <p class="stack__desc">Full type and method reference in the API docs.</p>
+        </div>
+        <span class="stack__tag">+ more</span>
+        <span class="stack__year" aria-hidden="true">↗</span>
+      </li>
+    </ol>
+  </section>
+
+  {# CODA / sister projects, context #}
+  <section class="section section--coda">
+    <div class="coda">
+      <p class="coda__kicker">// open source</p>
+      <p class="coda__big">
+        txeh is one of several open source components by <a href="https://imti.co"><em class="serif">Craig Johnston</em></a>, sponsored by <a href="https://deasil.works"><em class="serif">Deasil Works, Inc.</em></a> and <a href="https://plexara.io"><em class="serif">Plexara</em></a>. Released under the Apache 2.0 license. Originally built to support <a href="https://kubefwd.com">kubefwd</a> for Kubernetes service forwarding.
+      </p>
+      <div class="coda__cta">
+        <a class="btn btn--big" href="https://github.com/txn2/txeh">github.com/txn2/txeh →</a>
+        <a class="btn" href="https://txn2.com">txn2.com ↗</a>
+        <a class="btn" href="https://pkg.go.dev/github.com/txn2/txeh">pkg.go.dev ↗</a>
+        <a class="btn" href="https://github.com/txn2/txeh/releases">releases ↗</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+{% endblock %}
+
+{# Custom homepage footer replaces Material's. Class names prefixed
+   home-footer to avoid global collision with markdown class="footer". #}
+{% block footer %}
+<footer class="home-footer">
+  <div class="home-footer__rule" aria-hidden="true"></div>
+  <div class="home-footer__inner">
+    <div class="home-footer__col">
+      <p class="home-footer__label">about</p>
+      <p class="home-footer__text">A Go library and CLI for /etc/hosts management by <a href="https://imti.co">Craig Johnston</a>, part of the <a href="https://txn2.com">txn2</a> open source organization, sponsored by <a href="https://deasil.works">Deasil Works, Inc.</a> and <a href="https://plexara.io">Plexara</a>.</p>
+    </div>
+    <div class="home-footer__col">
+      <p class="home-footer__label">docs</p>
+      <ul class="home-footer__links">
+        <li><a href="getting-started/">getting started</a></li>
+        <li><a href="cli/">cli reference</a></li>
+        <li><a href="library/">go library</a></li>
+        <li><a href="api/">api reference</a></li>
+        <li><a href="troubleshooting/">troubleshooting</a></li>
+      </ul>
+    </div>
+    <div class="home-footer__col">
+      <p class="home-footer__label">interfaces</p>
+      <ul class="home-footer__links">
+        <li><a href="cli/">command line</a></li>
+        <li><a href="library/">go library</a></li>
+        <li><a href="https://pkg.go.dev/github.com/txn2/txeh">pkg.go.dev</a></li>
+        <li><a href="https://kubefwd.com">used by kubefwd</a></li>
+      </ul>
+    </div>
+    <div class="home-footer__col">
+      <p class="home-footer__label">code</p>
+      <ul class="home-footer__links">
+        <li><a href="https://github.com/txn2/txeh">github.com/txn2/txeh</a></li>
+        <li><a href="https://github.com/txn2/txeh/releases">releases</a></li>
+        <li><a href="https://github.com/txn2/homebrew-tap">homebrew tap</a></li>
+        <li><a href="https://github.com/txn2/txeh/issues">issues</a></li>
+      </ul>
+    </div>
+    <div class="home-footer__col home-footer__col--meta">
+      <p class="home-footer__label">txn2 / org</p>
+      <p class="home-footer__text"><a href="https://txn2.com">txn2.com&nbsp;↗</a><br>
+      <span class="home-footer__links__sub">canonical home of the txn2 open source organization</span></p>
+      <p class="home-footer__mono">apache 2.0 license <span class="dot">·</span> <span data-clock>·· UTC</span></p>
+    </div>
+  </div>
+  <div class="home-footer__base">
+    <p>© 2019-2026 · <a href="https://txn2.com">txn2</a> · txeh released under Apache 2.0.</p>
+    <p class="home-footer__base__tag"><a href="https://txn2.com">design · txn2.com&nbsp;↗</a></p>
+  </div>
+</footer>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  // Live UTC clock for rail/footer.
+  // Guarded against duplicate registration: Material's instant-nav rehydrates
+  // the body on every navigation back to the homepage; without this guard a
+  // fresh setInterval handle leaks each visit.
+  (function () {
+    if (window.__txehClock) {
+      window.__txehClock.tick();
+      return;
+    }
+    function tick() {
+      var now = new Date();
+      var hh = String(now.getUTCHours()).padStart(2, '0');
+      var mm = String(now.getUTCMinutes()).padStart(2, '0');
+      var stamp = hh + ':' + mm + ' UTC';
+      document.querySelectorAll('[data-clock]').forEach(function (el) {
+        el.textContent = stamp;
+      });
+    }
+    tick();
+    var handle = setInterval(tick, 30 * 1000);
+    window.__txehClock = { tick: tick, handle: handle };
+  })();
+</script>
+{% endblock %}
