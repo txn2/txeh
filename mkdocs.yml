@@ -14,19 +14,8 @@ theme:
   logo: images/txn2-logo.png
   favicon: images/logo.png
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  font:
-    text: Inter
-    code: JetBrains Mono
+    scheme: slate
+  font: false
   icon:
     repo: fontawesome/brands/github
   features:
@@ -35,9 +24,10 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
     - navigation.top
     - navigation.footer
-    - toc.integrate
     - search.suggest
     - search.highlight
     - search.share

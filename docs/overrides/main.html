@@ -1,16 +1,20 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
-  <!-- Open Graph / Facebook -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400..700&display=swap">
+
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ config.site_url }}">
-  <meta property="og:title" content="{{ config.site_name }} - /etc/hosts Management">
+  <meta property="og:title" content="{{ config.site_name }} / /etc/hosts management for Go">
   <meta property="og:description" content="{{ config.site_description }}">
+  <meta property="og:image" content="{{ config.site_url }}images/logo.png">
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="{{ config.site_url }}">
-  <meta name="twitter:title" content="{{ config.site_name }} - /etc/hosts Management">
+  <meta name="twitter:title" content="{{ config.site_name }} / /etc/hosts management for Go">
   <meta name="twitter:description" content="{{ config.site_description }}">
+  <meta name="twitter:image" content="{{ config.site_url }}images/logo.png">
   <meta name="twitter:creator" content="@cjimti">
 {% endblock %}
