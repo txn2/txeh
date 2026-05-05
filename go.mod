@@ -4,7 +4,7 @@ go 1.24.7
 
 require (
 	github.com/spf13/cobra v1.10.2
-	pgregory.net/rapid v1.2.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (
