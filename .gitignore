@@ -21,6 +21,8 @@ coverage.html
 credentials.json
 secrets.yaml
 secrets.yml
+.aws/
+.ssh/
 
 # Project-specific
 .claude
