@@ -1,4 +1,4 @@
-![txeh - /etc/hosts mangement](logo.png)
+![txeh - /etc/hosts management](logo.png)
 
 
 # Etc Hosts Management Utility & Go Library
