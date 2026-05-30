@@ -344,11 +344,13 @@ func (h *Hosts) AddHostWithComment(addressRaw, hostRaw, comment string) {
 // addHostWithComment is the internal implementation that handles both
 // commented and non-commented host additions.
 func (h *Hosts) addHostWithComment(addressRaw, hostRaw, comment string) { //nolint:revive // internal method mirrors public API naming
-	host := strings.TrimSpace(strings.ToLower(hostRaw))
+	host := stripLineBreaks(strings.TrimSpace(strings.ToLower(hostRaw)))
 	address := strings.TrimSpace(strings.ToLower(addressRaw))
 	// Normalize comment: trim spaces, but don't add/remove the # prefix
-	// (the # is handled during rendering)
-	comment = strings.TrimSpace(comment)
+	// (the # is handled during rendering). Strip line-break characters so a
+	// single logical entry cannot be split into multiple physical lines when
+	// rendered (CWE-117). See stripLineBreaks for details.
+	comment = stripLineBreaks(strings.TrimSpace(comment))
 
 	addressIP := net.ParseIP(address)
 	if addressIP == nil {
@@ -659,16 +661,42 @@ func (h *Hosts) removeHostFromLineLocked(hflIdx int, host, newAddress string) {
 	}
 }
 
+// stripLineBreaks removes characters that can terminate or split a physical
+// line in a hosts file: carriage return, line feed, vertical tab, form feed,
+// and NUL. Without this, an embedded "\r\n" in a comment or hostname would let
+// a single logical entry render as multiple lines, corrupting the file
+// structure when it is read back by txeh or any other consumer (CWE-117,
+// improper output neutralization). This is a robustness guard; trimming spaces
+// is handled separately by the caller.
+func stripLineBreaks(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\n', '\r', '\v', '\f', '\x00':
+			return -1 // drop the rune
+		default:
+			return r
+		}
+	}, s)
+}
+
 // lineFormatter formats a single host file line as a string.
 func lineFormatter(hfl HostFileLine) string {
 	if hfl.LineType < ADDRESS {
 		return hfl.Raw
 	}
 
-	if hfl.Comment != "" {
-		return fmt.Sprintf("%-16s %s # %s", hfl.Address, strings.Join(hfl.Hostnames, " "), hfl.Comment)
+	// Strip line-break characters as a render-time backstop so no code path
+	// can emit a multi-line entry, even if Hostnames or Comment were populated
+	// outside addHostWithComment.
+	hostnames := make([]string, len(hfl.Hostnames))
+	for i, hn := range hfl.Hostnames {
+		hostnames[i] = stripLineBreaks(hn)
 	}
-	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hfl.Hostnames, " "))
+
+	if hfl.Comment != "" {
+		return fmt.Sprintf("%-16s %s # %s", hfl.Address, strings.Join(hostnames, " "), stripLineBreaks(hfl.Comment))
+	}
+	return fmt.Sprintf("%-16s %s", hfl.Address, strings.Join(hostnames, " "))
 }
 
 // ipLocalhost is a regex pattern for IPv4 or IPv6 loopback range.
