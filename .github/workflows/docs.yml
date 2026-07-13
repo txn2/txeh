@@ -6,6 +6,10 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'sourcey.config.ts'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/*.go'
   workflow_dispatch:
 
 permissions:
@@ -27,11 +31,21 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+
       - name: Install dependencies
         run: pip install -r requirements-docs.txt
 
       - name: Build docs
         run: mkdocs build --strict
+
+      - name: Build Sourcey reference
+        run: |
+          npx --yes sourcey@3.6.5 build --output site/reference
+          mkdir -p site/reference/api
+          cp site/reference/api.html site/reference/api/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0

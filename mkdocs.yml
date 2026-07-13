@@ -44,6 +44,7 @@ nav:
   - CLI Reference: cli.md
   - Go Library: library.md
   - API Reference: api.md
+  - Sourcey Reference: https://txeh.txn2.com/reference/
   - Troubleshooting: troubleshooting.md
 
 extra:
