@@ -6,7 +6,7 @@ repo_url: https://github.com/txn2/txeh
 repo_name: txn2/txeh
 edit_uri: edit/master/docs/
 
-copyright: Copyright &copy; 2019 - 2026 Craig Johnston / Deasil Works, Inc.
+copyright: Copyright &copy; 2019 - 2026 <a href="https://imti.co">Craig Johnston</a> / <a href="https://deasil.works">Deasil Works, Inc.</a> / <a href="https://plexara.io">Plexara</a>
 
 theme:
   name: material

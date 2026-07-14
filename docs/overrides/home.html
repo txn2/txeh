@@ -23,8 +23,6 @@
   <div class="rail__meta">
     <span class="rail__rel">v1.8.0</span>
     <span class="rail__dot" aria-hidden="true">●</span>
-    <span data-clock>·· UTC</span>
-    <span class="rail__dot" aria-hidden="true">●</span>
     <a href="https://txn2.com" class="rail__org">part of <em class="serif">txn2</em>&nbsp;↗</a>
   </div>
   <nav class="rail__nav" aria-label="primary">
@@ -70,7 +68,6 @@
     <h1 class="hero__display">
       <span class="hero__row hero__row--1">
         <em class="serif">txeh</em>
-        <span class="hero__chip">v1.8.0 · go</span>
       </span>
       <span class="hero__row hero__row--2">
         <span class="outline">/etc/hosts</span>
@@ -82,7 +79,7 @@
 
     <div class="hero__intro">
       <p class="hero__lede">
-        <span class="dropcap">t</span>xeh manages the <code>/etc/hosts</code> file from Go and from the shell. Add, remove, list, and query hostname-to-IP mappings without hand-editing. Mutex-protected for safe concurrent use, comment-aware so entries from different sources stay separable, and cross-platform across Linux, macOS, and Windows. The library powers <a href="https://kubefwd.com">kubefwd</a>'s per-service hostname resolution and ships as a standalone CLI.
+        txeh manages the <code>/etc/hosts</code> file from Go and from the shell. Add, remove, list, and query hostname-to-IP mappings without hand-editing. Mutex-protected for safe concurrent use, comment-aware so entries from different sources stay separable, and cross-platform across Linux, macOS, and Windows. The library powers <a href="https://kubefwd.com">kubefwd</a>'s per-service hostname resolution and ships as a standalone CLI.
       </p>
       <p class="hero__lede hero__lede--muted">
         IPv4 and IPv6, CIDR-based bulk add and remove, dry-run preview, optional DNS cache flush after writes, and an in-memory mode that operates on raw text instead of a file. Apache 2.0, originally built to support <a href="https://github.com/txn2/kubefwd">kubefwd</a> for Kubernetes service forwarding.
@@ -214,71 +211,57 @@ _ = hosts.Save()</pre>
       </p>
     </header>
 
-    <ol class="stack">
+    <ul class="stack">
       <li class="stack__row">
-        <span class="stack__num">001</span>
         <div class="stack__main">
           <a class="stack__name" href="library/#adding-hosts">add and remove by host, ip, or cidr</a>
           <p class="stack__desc">Single-host or bulk operations. <code>AddHost</code>, <code>AddHosts</code>, <code>RemoveHost</code>, <code>RemoveAddress</code>, <code>RemoveCIDRs</code>. Operations are idempotent; re-adding a hostname is a no-op.</p>
         </div>
-        <span class="stack__tag">core</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row">
-        <span class="stack__num">002</span>
         <div class="stack__main">
           <a class="stack__name" href="library/#thread-safety">thread-safe by default</a>
           <p class="stack__desc">All public methods take an internal mutex. Daemons, controllers, and tools that mutate hosts from multiple goroutines (kubefwd among them) can call them directly without external locking.</p>
         </div>
-        <span class="stack__tag">runtime</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row">
-        <span class="stack__num">003</span>
         <div class="stack__main">
           <a class="stack__name" href="library/#inline-comments">inline comments preserved</a>
           <p class="stack__desc"><code>AddHostWithComment</code> tags entries with a source string. <code>RemoveByComment</code> removes everything tagged with that source. The library re-renders the file without losing any comment or blank line.</p>
         </div>
-        <span class="stack__tag">format</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row">
-        <span class="stack__num">004</span>
         <div class="stack__main">
           <a class="stack__name" href="library/#querying">query by host, ip, or comment</a>
           <p class="stack__desc"><code>ListAddressesByHost</code>, <code>ListHostsByIP</code>, <code>ListHostsByComment</code>, <code>ListHostsByCIDR</code>. Read-only inspection without parsing or rewriting.</p>
         </div>
-        <span class="stack__tag">query</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row">
-        <span class="stack__num">005</span>
         <div class="stack__main">
           <a class="stack__name" href="cli/#dns-cache-flushing">dns cache flush</a>
           <p class="stack__desc"><code>--flush</code> on the CLI or <code>TXEH_AUTO_FLUSH=1</code> in the environment runs the OS-native flush command after writes. <code>dscacheutil</code> on macOS, <code>resolvectl</code> on Linux, <code>ipconfig /flushdns</code> on Windows.</p>
         </div>
-        <span class="stack__tag">dns</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row">
-        <span class="stack__num">006</span>
         <div class="stack__main">
           <a class="stack__name" href="library/#from-a-string-in-memory">in-memory mode for tests</a>
           <p class="stack__desc">Pass <code>RawText</code> to <code>NewHosts</code> and operate on a string. <code>Save()</code> errors as expected (no path); <code>RenderHostsFile()</code> returns the mutated text. Useful in unit tests and ephemeral fixtures.</p>
         </div>
-        <span class="stack__tag">testing</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
       <li class="stack__row stack__row--more">
-        <span class="stack__num">···</span>
         <div class="stack__main">
           <a class="stack__name" href="api/">ipv4 and ipv6, custom paths, dry-run, version stamping</a>
           <p class="stack__desc">Full type and method reference in the API docs.</p>
         </div>
-        <span class="stack__tag">+ more</span>
         <span class="stack__year" aria-hidden="true">↗</span>
       </li>
-    </ol>
+    </ul>
   </section>
 
   {# CODA / sister projects, context #}
@@ -342,7 +325,7 @@ _ = hosts.Save()</pre>
       <p class="home-footer__label">txn2 / org</p>
       <p class="home-footer__text"><a href="https://txn2.com">txn2.com&nbsp;↗</a><br>
       <span class="home-footer__links__sub">canonical home of the txn2 open source organization</span></p>
-      <p class="home-footer__mono">apache 2.0 license <span class="dot">·</span> <span data-clock>·· UTC</span></p>
+      <p class="home-footer__mono">apache 2.0 license</p>
     </div>
   </div>
   <div class="home-footer__base">
@@ -350,32 +333,4 @@ _ = hosts.Save()</pre>
     <p class="home-footer__base__tag"><a href="https://txn2.com">design · txn2.com&nbsp;↗</a></p>
   </div>
 </footer>
-{% endblock %}
-
-{% block scripts %}
-{{ super() }}
-<script>
-  // Live UTC clock for rail/footer.
-  // Guarded against duplicate registration: Material's instant-nav rehydrates
-  // the body on every navigation back to the homepage; without this guard a
-  // fresh setInterval handle leaks each visit.
-  (function () {
-    if (window.__txehClock) {
-      window.__txehClock.tick();
-      return;
-    }
-    function tick() {
-      var now = new Date();
-      var hh = String(now.getUTCHours()).padStart(2, '0');
-      var mm = String(now.getUTCMinutes()).padStart(2, '0');
-      var stamp = hh + ':' + mm + ' UTC';
-      document.querySelectorAll('[data-clock]').forEach(function (el) {
-        el.textContent = stamp;
-      });
-    }
-    tick();
-    var handle = setInterval(tick, 30 * 1000);
-    window.__txehClock = { tick: tick, handle: handle };
-  })();
-</script>
 {% endblock %}
